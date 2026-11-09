@@ -1,0 +1,168 @@
+# CI (S0.6) — every push / PR is triaged: quality → tests by tier → coverage →
+# SonarQube → security (OWASP-aligned) → data-leak guard → eval regression gate.
+#
+# Evals run in CI only on COMMITTED synthetic data (harness/selftest + our golden
+# fixtures). The real credit-union corpus is local-only (gitignored) and the only
+# rule that makes that survivable is the data-leak guard below.
+name: ci
+
+on:
+  push:
+    paths-ignore:
+      - "**.md"
+      - "PLAN.md"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "PLAN.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PY: "3.11"
+
+jobs:
+  # ---------------------------------------------------------------- 1. boundary
+  leak-guard:
+    name: data-leak guard (corpus stays local)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no credit-union data enters the repo
+        run: |
+          python3 tools/data_leak_guard.py
+
+  # ------------------------------------------------------------------ 2. quality
+  quality:
+    name: code quality (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY }}
+      - name: ruff — lint answers/ and tools/ (kit dirs are organizers' code)
+        run: |
+          python -m pip install --quiet ruff==0.8.4
+          ruff check answers tools
+      - name: syntax compile (belt & suspenders across py versions)
+        run: python -m compileall -q answers tools
+
+  # ------------------------------------------------------------- 3. tests by tier
+  tests:
+    name: tests (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.9", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: unit tests (test_unit_*.py — pure extractor/parsing logic)
+        run: |
+          python -m unittest discover -s answers/tests -t answers/tests -p "test_unit_*.py" -v
+
+      - name: component tests (test_component_*.py — claim store / trust stack / parser / refusal guard)
+        run: |
+          python -m unittest discover -s answers/tests -t answers/tests -p "test_component_*.py" -v
+
+      - name: integration tests (test_integration_*.py — contract shape, zero-snapshot grace, harness selftest)
+        run: |
+          python -m unittest discover -s answers/tests -t answers/tests -p "test_integration_*.py" -v
+
+      - name: integration — run_eval on synthetic selftest corpus (ingest → answer → conflicts → score)
+        run: |
+          python harness/run_eval.py \
+            --submission answers \
+            --snapshots harness/selftest/snapshots \
+            --eval harness/selftest/eval.jsonl \
+            --conflicts-gold harness/selftest/conflicts_gold.json \
+            --out results_ci/selftest
+
+      - name: eval regression gate (vs committed baseline; no question may regress)
+        run: |
+          python tools/eval_gate.py \
+            --report results_ci/selftest/report.json \
+            --baseline answers/tests/baseline_selftest.json
+
+      - name: upload eval artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ matrix.python-version }}
+          path: results_ci/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ------------------------------------------------ 4. coverage → sonarqube
+  coverage:
+    name: coverage + SonarQube
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY }}
+      - name: run full test suite under coverage.py
+        run: |
+          python -m pip install --quiet coverage==7.6.7
+          coverage run --rcfile=.coveragerc -m unittest discover -s answers/tests -t answers/tests -v
+          coverage xml -o coverage.xml
+          coverage report
+      - name: upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 14
+      - name: SonarQube scan (publishes coverage.xml; skipped unless SONAR_TOKEN/SONAR_HOST_URL configured)
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+  # ---------------------------------------------------------- 5. security (OWASP)
+  security:
+    name: security (secrets / SAST / vulnerable deps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history for the secret scan
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY }}
+
+      - name: gitleaks — secret scan of repository history and working tree
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --redact --report-path gitleaks-report.json --report-format json
+          ./gitleaks detect --redact --no-banner --report-path /dev/null
+
+      - name: bandit — SAST over our code (submission + tooling)
+        run: |
+          python -m pip install --quiet bandit==1.9.4
+          bandit -r answers tools --skip B101,B404,B603 --severity-level medium
+
+      - name: pip-audit — vulnerable dependencies (grading path must stay clean)
+        run: |
+          python -m pip install --quiet pip-audit==2.7.3
+          pip-audit --skip-editable --desc off

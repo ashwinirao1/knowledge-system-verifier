@@ -1,0 +1,40 @@
+{
+  "by_category": {
+    "current_value": {
+      "n": 1,
+      "score": 0.0
+    },
+    "should_refuse": {
+      "n": 1,
+      "score": 1.0
+    },
+    "stale_trap": {
+      "n": 2,
+      "score": 0.0
+    },
+    "temporal_as_of": {
+      "n": 1,
+      "score": 0.0
+    }
+  },
+  "conflicts": {
+    "f1": 0.0,
+    "resolution_accuracy": 0.0
+  },
+  "consistency": {
+    "paraphrase_consistency": 1.0,
+    "paraphrase_groups": 1,
+    "repeat_checks": 5,
+    "repeat_consistency": 1.0,
+    "score": 1.0
+  },
+  "errors": 0,
+  "final_score": 0.17,
+  "ingest_over_limit": false,
+  "ingest_seconds": 0.0,
+  "qa_score": 0.2,
+  "speed": {
+    "p95_s": 0.0,
+    "score": 1.0
+  }
+}

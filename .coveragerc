@@ -1,0 +1,11 @@
+[run]
+branch = True
+source = answers
+omit =
+    */tests/*
+
+[report]
+exclude_also =
+    if __name__ == "__main__":
+    \.\.\.  # ellipsis placeholder
+show_missing = True
