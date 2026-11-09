@@ -1,0 +1,3 @@
+# Intentionally empty (S0.1). R4: grading path is pure stdlib — this file must
+# stay as close to empty as possible; every dependency is grading-env risk.
+# Dev/CI tooling lives in the GitHub Actions workflow, never here.

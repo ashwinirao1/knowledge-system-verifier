@@ -1,0 +1,25 @@
+# --- data boundary: the credit-union corpus is local-only, never enters git ---
+snapshots/
+snapshots_zip/
+results/
+results_ci/
+
+# organizer materials kept local
+Knowledge-Hackathon-Assignment.pdf
+
+# python / dev Artifacts
+.venv/
+__pycache__/
+*.py[cod]
+.coverage
+coverage.xml
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# local dev state / caches / generated ledgers
+*.db
+*.sqlite3
+*.sqlite
+.DS_Store
+node_modules/
