@@ -13,6 +13,8 @@ dimension that distinguishes the fact: term, jumbo, special, IRA flavor.
 Values with footnote markers ("4.10%2") are unmarked; the dividend-rate and
 APY columns both become claims (separate metrics, same tier_dims).
 """
+from __future__ import annotations
+
 import re
 
 from tables import Table

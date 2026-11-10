@@ -5,6 +5,8 @@ artifacts — literal ``\\r\\n`` escape sequences glued onto prose, inline image
 markdown, reCAPTCHA / form-embed junk. Parsers that ignore them mis-split
 tables and mis-detect dates. Clean once, parse deterministically.
 """
+from __future__ import annotations
+
 import re
 
 # Literal escape sequences the exports embed inside prose lines (four chars).

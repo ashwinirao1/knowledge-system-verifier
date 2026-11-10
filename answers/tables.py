@@ -8,6 +8,8 @@ blocks — so a naive contains() scan picks up the wrong date. The discriminator
 used here: the table-level statement line STARTS with the phrase (after
 optional markdown emphasis), never with a footnote marker.
 """
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
 

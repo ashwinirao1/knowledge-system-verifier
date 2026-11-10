@@ -8,6 +8,8 @@ Fixed order (AGENTS.md §3) applied to a candidate set:
 
 One winner per canonical key; distinct keys collapse how the synthesizer wants.
 """
+from __future__ import annotations
+
 import re
 
 MONTHS = {

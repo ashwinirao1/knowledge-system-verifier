@@ -7,6 +7,8 @@ R1 rails implemented here, hard:
   - identical slot sets produce byte-identical text (R3), because claim
     selection is deterministic and the templates are pure functions.
 """
+from __future__ import annotations
+
 from ledger import Claim
 
 REFUSAL = (

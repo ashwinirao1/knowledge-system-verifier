@@ -7,6 +7,8 @@ Trust order from AGENTS.md §3 (higher rank = more authoritative):
 The rank is attached to the claim at ingest time so the ledger can order
 candidates without re-classifying pages at answer time (R2: lookups only).
 """
+from __future__ import annotations
+
 import re
 
 # (page_type, authority_rank)

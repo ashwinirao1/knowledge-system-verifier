@@ -6,6 +6,8 @@ but never discards a DISTINCT value: every state the website has ever shown
 stays in the ledger. `as_of` reads pick the snapshot, and answers read only
 the rows of the selected snapshot (R2: queries only; no model calls).
 """
+from __future__ import annotations
+
 import json
 import sqlite3
 from dataclasses import dataclass

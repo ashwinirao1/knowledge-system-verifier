@@ -16,6 +16,8 @@ authority, freshest effective date) -> template synthesis. Refusals are
 digit-free and confident=False (R1); answering is pure lookups (R2); fully
 deterministic (R3); stdlib only, offline (R4).
 """
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 from typing import Optional

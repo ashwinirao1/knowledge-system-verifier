@@ -4,6 +4,8 @@ Scope note (tracer slice): this version only claims the certificate family.
 Questions it cannot fully slot (no family, no term) return `None` → the answer
 path declines honestly instead of guessing (R1).
 """
+from __future__ import annotations
+
 import re
 
 WORD_NUMBERS = {
