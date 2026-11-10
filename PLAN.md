@@ -164,10 +164,21 @@ an increment moved us. The Eval Ledger (§7) is the scoreboard of record.*
   conflicts machinery is exercised by the synthetic promo-trap fixture. Public eval unchanged:
   0.1508 (no regressions).
 
-**S0.5 Playback review (tracer-bullet retro)**
-- [ ] Demo: run scorer, show ledger contents, one conflict, one refusal
-- [ ] Retro: extraction quality on the certificates family; update plan if schema bends
-- Done when: Eval Ledger row for T0 filled; go/no-go for T1.
+**S0.5 Playback review (tracer-bullet retro) — DONE (2026-11-10)**
+- [x] Demo (real corpus + selftest, all verified live):
+  - ledger: 3,294 pages → 278 claims in 3.3 s; metrics apy/dividend_rate 139/139; personal 214 / business 64; replica counts 1/2/3̅ (replica merge w/ rank upgrade working — the rates-hub rendering upgrades to product-page rank 100 with multi-source provenance)
+  - one conflict (selftest): `6-Month certificate apy values=[3.50%, 2.95%] → resolution 3.50%`, reason = page-class authority over promo; answered "The 6-Month Certificate pays 3.50% APY." with digit-free conflict_note
+  - one refusal: mortgage question → clean digit-free `confident=False`
+  - one temporal answer: dup-006 → "paid 3.90% APY ($100,000 minimum)" (no 4.00% leak)
+  - determinism/speed: 5 repeats byte-identical, mean latency 0.6 ms per answer
+- [x] Retro findings (certificates family):
+  - **Keep:** member dim in canonical key (caught the personal/business page merge); statement-`startswith` effective-date rule; prose `special`-token alignment; replica rank-upgrade provenance
+  - **Trap defended so far:** IRA flavor rows (Roth/Traditional/plain) are distinct keys; non-IRA questions filter them out — no cross-tier leak observed
+  - **Known gap → T1:** consistency pillar on public eval = paraphrase+repeat OK, but accuracy is dragged by non-certificate families (branch_info, fees, entity_attribution, list_completeness all 0.00 — out of scope until their families land); selftest t3 (lost debit card fee $2.50) is the same story
+  - **Data fact:** real corpus has ZERO prose certificate rates (all in tables) — 0 real conflicts is truthful, conflicts machinery validated synthetically
+- [x] Eval Ledger row for T0 = the S0.4 row (final T0 state); baseline_selftest.json raised to the 0.83 floor
+- Done when: ✅ **GO for T1** — expand families (current_value/fees first, then savings tiers, branch_info),
+  reuse the same clean→classify→extract→ledger pipeline per family.
 
 **S0.6 CI/CD quality gate (GitHub Actions) — every push is triaged by CI: tests by tier,
 quality, security, data boundary — before any ledger row means anything.**
