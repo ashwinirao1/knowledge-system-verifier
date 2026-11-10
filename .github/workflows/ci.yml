@@ -26,18 +26,18 @@ permissions:
 
 env:
   PY: "3.11"
-  # ubuntu-24.04 IS PINNED ON PURPOSE: the ubuntu-latest label is rolling to
-  # Ubuntu 26.04 (migration deadline 2026-11-19), and setup-python's prebuilt
-  # Python manifests ship after the runner image — `python-version: "3.9"` fails
-  # with "not found" on the new image until its manifest lands. Pinning keeps
-  # the 3.9 compat tier reliable. Revisit when 26.04 manifests are complete.
-  RUNNER_IMG: ubuntu-24.04
+  # NOTE: every job pins runs-on: ubuntu-24.04 DIRECTLY (runs-on does not accept
+  # the env context, so this cannot be a variable). The pin exists because the
+  # ubuntu-latest label is rolling to Ubuntu 26.04 (migration deadline
+  # 2026-11-19) and setup-python's prebuilt Python manifests ship after the
+  # runner image — `python-version: "3.9"` fails with "not found" on the new
+  # image until its manifest lands. Revisit when 26.04 manifests are complete.
 
 jobs:
   # ---------------------------------------------------------------- 1. boundary
   leak-guard:
     name: data-leak guard (corpus stays local)
-    runs-on: ${{ env.RUNNER_IMG }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
   # ------------------------------------------------------------------ 2. quality
   quality:
     name: code quality (ruff)
-    runs-on: ${{ env.RUNNER_IMG }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
   # ------------------------------------------------------------- 3. tests by tier
   tests:
     name: tests (${{ matrix.python-version }})
-    runs-on: ${{ env.RUNNER_IMG }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: true
@@ -116,7 +116,7 @@ jobs:
   # ------------------------------------------------ 4. coverage → sonarqube
   coverage:
     name: coverage + SonarQube
-    runs-on: ${{ env.RUNNER_IMG }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -147,7 +147,7 @@ jobs:
   # ---------------------------------------------------------- 5. security (OWASP)
   security:
     name: security (secrets / SAST / vulnerable deps)
-    runs-on: ${{ env.RUNNER_IMG }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
