@@ -1,11 +1,15 @@
 # --- data boundary: the credit-union corpus is local-only, never enters git ---
-snapshots/
-snapshots_zip/
-results/
-results_ci/
+# These are ANCHORED to the repo root on purpose (unanchored "snapshots/" would
+# also match harness/selftest/snapshots/ — the synthetic CI corpus — silently
+# excluding it from the repo and breaking CI. Rooted rules for real data,
+# unrooted for generated cruft.)
+/snapshots/
+/snapshots_zip/
+/results/
+/results_ci/
 
 # organizer materials kept local
-Knowledge-Hackathon-Assignment.pdf
+/Knowledge-Hackathon-Assignment.pdf
 
 # python / dev Artifacts
 .venv/
