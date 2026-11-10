@@ -8,6 +8,11 @@ credit-union website, keeps every fact it finds as an immutable claim (value + q
 effective date + source page + snapshot date), and answers member questions from the single
 claim that wins a fixed trust-resolution stack — or declines honestly.
 
+The plain-language narrative of *why* each design choice was made — the storage-engine
+tradeoff (why in-memory SQLite and not Postgres/MongoDB/a graph store), template-only
+answering, keep-history-forever, and the issues we hit and fixed — lives in
+**DECISIONS.md** at the repo root.
+
 ## How "current" is decided (being built at S0.2/S0.3 — final text due S6.2)
 
 Fixed order: exact qualifier/tier match → page-class authority (product page / rates hub >

@@ -1,6 +1,6 @@
 """Page classifier (S0.2): URL-based v0 with fixed authority ranks.
 
-Trust order from AGENTS.md §3 (higher rank = more authoritative):
+Trust order from AGENTS.md section 3 (higher rank = more authoritative):
     product page ~= rates hub  >  template / footer  >  newsroom / blog
     >  promo  >  calculator  >  old PDF
 

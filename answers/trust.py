@@ -1,6 +1,6 @@
 """Temporal selection + trust resolution (S0.3 v0).
 
-Fixed order (AGENTS.md §3) applied to a candidate set:
+Fixed order (AGENTS.md section 3) applied to a candidate set:
     1. exact qualifier / tier match  (done by the slot filter at query time)
     2. page-class authority          (ledger carries page_rank per claim)
     3. freshest table-level effective date

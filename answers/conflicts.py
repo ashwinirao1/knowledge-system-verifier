@@ -7,7 +7,7 @@ R5 precision rules implemented here:
   - replica pages carrying the SAME fact count once (ingest already merged
     them; survivors here are genuinely competing statements);
   - every conflict states a winner and the reason it won.
-Trust resolution (~AGENTS §3): page-class authority, then freshest
+Trust resolution (per AGENTS section 3): page-class authority, then freshest
 table-level effective date, then the ledger's stable tie-breaking.
 """
 from __future__ import annotations

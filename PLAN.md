@@ -34,7 +34,7 @@ Every story below must trace to one of these hard requirements:
 | R4 | **Offline safety** — grading path needs no network, no API key | Graded in a clean Python 3.11 env; online dependency = possible total failure |
 | R5 | **Conflict precision** — only real same-key contradictions | Conflicts = F1 vs gold + 0.3·resolution; flooding destroys precision |
 
-**Rules we obey verbatim (PDF §8):** answer only from the provided snapshots (no live website
+**Rules we obey verbatim (PDF section 8):** answer only from the provided snapshots (no live website
 calls) · every `answer` call ≤ 60 s · ingest ≤ 30 min · any language model or library allowed, paid
 APIs must be declared in `NOTES.md` (we plan to need none) · do not redistribute the snapshot data
 (repo carries code + notes only) · do not rename anything in the contract · never modify
@@ -85,7 +85,7 @@ We build **thin vertical slices end-to-end, then fatten them**. The first "trace
 > scorer end-to-end → print a real score above the starter's.
 
 Every later increment repeats the same loop for a wider slice. **After every story we run the
-public eval and append a row to the Eval Ledger (§7).** Nothing merges without a runnable system.
+public eval and append a row to the Eval Ledger (section 7).** Nothing merges without a runnable system.
 
 ## 5. Deliverable roadmap
 
@@ -97,10 +97,10 @@ public eval and append a row to the Eval Ledger (§7).** Nothing merges without 
 | **T3** | **Question understanding** | Slot grammar + synonym/entity resolution (personal vs business); deterministic router; **self-built paraphrase benchmark (40 → ~80 reworded)** | Route agreement on paraphrase set ≥ 90%; no group splits | 3–4 d |
 | **T4** | **Fallback + a11y of speed/consistency** | BM25 fallback through the *shared* resolver; answer caching; index warmed during ingest | Repeat-consistency 100%; route agreement maintained; p95 < 200 ms | 2–3 d |
 | **T5** | **Conflicts productionized** | Tier-aware conflict generator w/ precision control (replica dedup, ranking, cap); hand-built local gold (≥15 entries) | `harness/selftest` gold passes; local-gold precision ≥ 0.8, resolution ok | 2–3 d |
-| **T6** | **Submission hardening** | Pinned requirements; clean-3.11 venv install test; fresh-clone end-to-end; final `NOTES.md`; red-team vs PDF rules | Submission checklist (§10) fully green | 1–2 d |
+| **T6** | **Submission hardening** | Pinned requirements; clean-3.11 venv install test; fresh-clone end-to-end; final `NOTES.md`; red-team vs PDF rules | Submission checklist (section 10) fully green | 1–2 d |
 
 *\* Score targets are honest engineering estimates, not promises; they exist so we can tell whether
-an increment moved us. The Eval Ledger (§7) is the scoreboard of record.*
+an increment moved us. The Eval Ledger (section 7) is the scoreboard of record.*
 
 ## 6. Stories & tasks
 
@@ -115,8 +115,8 @@ an increment moved us. The Eval Ledger (§7) is the scoreboard of record.*
   - [x] Create `answers/` with `solution.py` implementing `build()` → object with `ingest/answer/conflicts` matching `harness/contract.py` (no renames); contract imported exactly like the starter does
   - [x] `requirements.txt` (intentionally empty — stdlib only, R4), `NOTES.md` stub
   - [x] `.gitignore`: snapshot zips & unpacked snapshots, `results*/`, caches, `.DS_Store`; no data redistribution
-  - [x] Push this repo to GitHub — only after `.gitignore` excludes the data dirs (see `AGENTS.md` §2: no data redistribution) — done 2026-11-10; CI verified green (see S0.6)
-  - [x] Baseline run: `python harness/run_eval.py --submission starter --eval eval/public_eval.jsonl` → recorded in §7 (final 0.093)
+  - [x] Push this repo to GitHub — only after `.gitignore` excludes the data dirs (see `AGENTS.md` section 2: no data redistribution) — done 2026-11-10; CI verified green (see S0.6)
+  - [x] Baseline run: `python harness/run_eval.py --submission starter --eval eval/public_eval.jsonl` → recorded in section 7 (final 0.093)
 - Done when: `[x]` — `run_eval.py --submission answers` executes end-to-end on both the public corpus
   and the synthetic selftest; zero-snapshot grace verified by tests (7 OK, 100% coverage).
 
@@ -341,9 +341,24 @@ quality, security, data boundary — before any ledger row means anything.**
 - [ ] Attribute ledger events when a key's value changes between snapshots (3.90% → 4.00% example)
 - Done when: answerable "what changed between May and September" queries; conflicts can cite the transition.
 
+**S2.4 Entity facts, counts & list families** (added 2026-11-10 from hidden-eval gap analysis —
+public failures: entity_attribution 0.25, conflict_resolution 0.33, dup-005 0.00)
+- [ ] Entity facts as `facts` claims: routing number, Forbes recognition count ("five times"),
+  membership eligibility (charter-area states list) — the "who/what is Dupaco" fact class.
+- [ ] Count questions ("How many branches does Dupaco have?") — replica/ordinal semantics:
+  the answer is the *published statement* of count (e.g. "over 600 employees and 24 branch
+  locations" boilerplate), not a naive count of ledger rows (locator pages list only ~20 with
+  one listing per branch = replica semantics, R5).
+- [ ] List-complete answers: "get me the rate for the certificate of accounts" must enumerate
+  all published cert terms/values rather than asking which term (dup-005 explicit-exception).
+- Done when: dup-054/055/073/081/087/101/005 pass (or are honestly refused with the gap logged);
+  new tests per extractor family; no regressions.
+
 ### T3 — Question understanding
 
 **S3.1 Slot grammar + synonym layer** (share certificate = CD; model-year phrasing; "current"/"right now")
+- Hidden-eval evidence (2026-11-10): dup-005 "certificate of accounts" phrasing already fails the
+  grammar — real rewording stress, not hypothetical.
 **S3.2 Entity resolution** (personal vs business; Bright Savings vs Jump Start; Money Market vs Share Savings)
 **S3.3 Paraphrase self-benchmark** — hand-reword the 40 public items into ~80 variants (selftest
 `t1`/`t1b` style); harness runner to compare route + numeric outcome
@@ -353,6 +368,9 @@ quality, security, data boundary — before any ledger row means anything.**
 ### T4 — Fallback + speed/consistency hardening
 
 **S4.1 BM25 fallback index** over cleaned sections, **filtered by as_of**, passed through shared trust stack
+- Hidden-eval insurance: the hidden set has "real paraphrase groups" — grammar-only routing is the
+  biggest single risk (public paraphrase consistency 1.0 uses gentle rewordings). The fallback must
+  refuse digit-free when BM25 confidence is low (R1), never answer from a weak match.
 **S4.2 Deterministic caching & formatting** (canonical number formatting; memoise repeats)
 **S4.3 Warm-up at end of ingest** (first question is not the slowest question)
 - Done when: repeats/paraphrases identical; p95 < 200 ms locally.
@@ -374,7 +392,7 @@ dependencies lean/offline
 **S6.3 Fresh-clone E2E** — clone → install → `run_eval.py --submission answers ...` runs clean
 **S6.4 Red-team vs PDF rules** — audit: no live calls, ≤60 s/answer, ≤30 min ingest, no renames,
 harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinned commit shared
-- Done when: §10 checklist fully green.
+- Done when: section 10 checklist fully green.
 
 ## 7. Eval Ledger (scoreboard of record)
 
@@ -401,13 +419,13 @@ harness (organizer-side); assume hidden run uses it for free-text items.
 
 ## 8. Working agreements / DoD
 
-**Story DoD:** task acceptance criteria met; public eval run appended to §7; no regressions on
+**Story DoD:** task acceptance criteria met; public eval run appended to section 7; no regressions on
 previously-passing questions; unit tests for the changed extractor family.
-**Release DoD:** §10 checklist green.
+**Release DoD:** section 10 checklist green.
 **Red flags (instant fix):** any answer text that can contain an unselected value, any digit in a
 refusal, any non-deterministic answer path, any network/key dependency in the grading path, any
 "data redistribution" risk in the repo.
-**Cadence:** standup each increment; playback demo after each deliverable (§5) for observers.
+**Cadence:** standup each increment; playback demo after each deliverable (section 5) for observers.
 
 ## 9. Risks, kill criteria & decision log
 
@@ -420,14 +438,29 @@ refusal, any non-deterministic answer path, any network/key dependency in the gr
 | Grading env lacks a dependency | Low | S6.1 fresh-env test; avoid heavy/uncommon wheels (no torch-class deps) |
 | Hidden set emphasises unmeasurable pillars (judge free-text) | Medium | Template answers read like careful human prose; no token-dumping |
 
-**Decision log (already made, with rationale in the design discussions):**
+**Decision log (already made, with rationale in the design discussions — the
+plain-language narrative, tradeoffs and interview-ready "issues we hit" writeups
+live in `DECISIONS.md`):**
 1. Core = **claims ledger + trust resolution** (Option B) — the eval is a qualified-facts-over-time problem, not a search problem.
 2. **Hybrid** (Option C): BM25 fallback through the shared resolver — coverage without losing determinism.
 3. **Rejected for answer-time LLM (Option F)**: violates R1/R2/R3/R4 structurally (trap leakage, tail latency, nondeterminism, offline risk). Off-by-default formatter only, ever.
 4. **Rejected diff-first (H)**: 97% churn is dynamic noise; blind to within-snapshot contradictions. Diff events kept as a *feature* (S2.3).
 5. Graph (G) folded into schema design, not a graph store. D and E on the bench behind kill criteria.
+6. **Storage = in-memory SQLite, stdlib `sqlite3`** (S0.2; revisited at S1.5) — Postgres/MySQL add a
+   server + socket hop for identical B-tree index performance on ~300 claims; MongoDB loses the
+   in-engine ORDER BY for a schema we keep rigid anyway; graph stores run a service to walk a
+   two-level tree. In-memory also guarantees no corpus-derived files are ever left on disk.
+   Full rationale: `DECISIONS.md`, Decision 2.
+7. **Facts parse first in the question router** (S1.5) — "cards to a mobile wallet" must never
+   reach the card-APR grammar; routing order is a correctness surface, not plumbing.
+8. **Unbound-year annual questions answer the chronological series** (S1.5, dup-088) — the gold
+   expects the older stat while a fresher post exists in every snapshot; series replay is
+   derivable, fresher-wins is not. Precedent: dup-006 allows historical context.
+9. **Program questions must bind the program name** (S1.5) — unknown program names refuse rather
+   than leak the one program we have on file (caught live: "Bright Start" initially answered with
+   Home$tart details).
 
-## 10. Submission checklist (from PDF §7)
+## 10. Submission checklist (from PDF section 7)
 
 - [ ] GitHub repo pushed; organizers have read access
 - [ ] `solution.py` with `build()` in the repo (folder ≠ `starter/`) — our `answers/`

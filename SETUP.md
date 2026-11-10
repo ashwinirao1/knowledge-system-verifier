@@ -69,7 +69,7 @@ above, shaped exactly as `harness/contract.py` requires. Nothing is renamed.
    ```
 
    The full public eval needs the local corpus (which is never committed): run it after every
-   story and record the result in `PLAN.md` §7 (the Eval Ledger).
+   story and record the result in `PLAN.md` section 7 (the Eval Ledger).
 
 ## Status
 

@@ -14,12 +14,12 @@ of one credit-union website that contradict each other; we publish `answers/solu
 `build()` → `ingest(snapshot)` / `answer(question, as_of=None)` / `conflicts()`, shaped exactly per
 `harness/contract.py`. **Nothing is renamed.**
 
-Architecture (decided, see PLAN.md §9 decision log): an **append-only temporal claims ledger**
+Architecture (decided, see PLAN.md section 9 decision log): an **append-only temporal claims ledger**
 (website-as-settlement-file, reconciliation-engine mindset) + a **trust-resolution stack** +
 a **deterministic BM25 fallback** through the same stack, with **template-only answer synthesis**.
 No LLM, no network, in the grading path.
 
-## 2. Absolute rules (assignment §8 + event-specific)
+## 2. Absolute rules (assignment section 8 + event-specific)
 
 **Never modify or commit to:** `harness/`, `eval/`, `starter/`, `README.md`,
 `Knowledge-Hackathon-Assignment.pdf`. Grading uses the organizers' own copy of the harness — edits
@@ -60,7 +60,7 @@ snapshot date = posting date; page-declared "effective as of" = value date.
 
 ## 4. Workflow: tracer-bullet increments
 
-- Work **only** from PLAN.md stories (T0–T6, §6). If work isn't a task in a story, either it's
+- Work **only** from PLAN.md stories (T0–T6, section 6). If work isn't a task in a story, either it's
   out of scope or the plan needs a new task — update PLAN.md **first**, then build.
 - Every increment must leave the system runnable end-to-end. Do not commit broad restructures
   without a passing public eval.
@@ -69,7 +69,7 @@ snapshot date = posting date; page-declared "effective as of" = value date.
   bandit + pip-audit + gitleaks (OWASP: SAST, vulnerable deps, secret scan), the data-leak guard,
   and the eval regression gate. Push = green CI; story done = Eval Ledger row. The full public
   eval runs locally after each story (corpus is local-only) and is recorded by hand.
-- **After every story**: run the public eval and append a row to the Eval Ledger (PLAN.md §7) —
+- **After every story**: run the public eval and append a row to the Eval Ledger (PLAN.md section 7) —
   even if the score dipped; the ledger is honest.
 - Standard eval commands (from repo root):
 
@@ -102,13 +102,13 @@ snapshot date = posting date; page-declared "effective as of" = value date.
 - Every subagent prompt must include: (a) "read AGENTS.md first", (b) the story id + Done-when,
   (c) the exact paths it may write to (e.g. `tools/`, `answers/tests/`), (d) the reminder that the
   snapshots are not to be redistributed.
-- The lead agent commits; subagent output is reviewed against §3 red flags before merge.
+- The lead agent commits; subagent output is reviewed against section 3 red flags before merge.
 
-## 7. Definition of Done (mirrors PLAN.md §8)
+## 7. Definition of Done (mirrors PLAN.md section 8)
 
 - Story DoD: task acceptance criteria met, eval row appended, no regressions on previously-passing
   questions, tests added for the touched extractor family.
-- Release DoD: PLAN.md §10 submission checklist fully green (fresh-clone run in clean Python 3.11,
+- Release DoD: PLAN.md section 10 submission checklist fully green (fresh-clone run in clean Python 3.11,
   `NOTES.md` final, no data in repo).
 
 ## 8. Talking rules (how agents communicate changes)

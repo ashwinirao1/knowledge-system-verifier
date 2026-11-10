@@ -66,7 +66,7 @@ FACTS_PRODUCT = "facts"
 
 
 def _content_hash(product: str, metric: str, tier_dims: dict, value_text: str, eff: str | None) -> str:
-    """Idempotency key (AGENTS §3): canonical key + value + value-date."""
+    """Idempotency key (AGENTS section 3): canonical key + value + value-date."""
     key = json.dumps([
         product, metric,
         json.dumps(tier_dims, sort_keys=True),

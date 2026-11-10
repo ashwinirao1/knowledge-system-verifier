@@ -1,5 +1,14 @@
 """Temporal claims ledger (S0.2): SQLite in-memory store with provenance.
 
+Why SQLite, in memory (full narrative in DECISIONS.md, Decision 2): the
+grading contract runs build() -> ingest -> answer inside ONE process, so the
+store only needs to live as long as the run. In-memory SQLite is stdlib
+(nothing to install), answers sub-millisecond on our scale (a few hundred
+claims, indexed on product+metric+snapshot — the same B-trees Postgres or
+MySQL would build, minus the server and the socket hop), and it can never
+leave corpus-derived files on disk. Single-writer is a documented, deliberate
+concession: the harness serializes everything (max_workers=1).
+
 Ingest deduplicates REPLICAS (same content hash inside one snapshot — e.g. the
 same sheet rendered on the rates hub and the product page) by counting them,
 but never discards a DISTINCT value: every state the website has ever shown
