@@ -164,9 +164,15 @@ quality, security, data boundary — before any ledger row means anything.**
   - [x] Security (OWASP-aligned): gitleaks secret scan (full history), bandit 1.9.4 SAST, pip-audit vulnerable-dependency check
   - [x] Data-leak guard job: `tools/data_leak_guard.py` — paths + content markers; scans staged + tracked + untracked-not-ignored so it works pre-push too
   - [x] Committed config: `ruff.toml`, `.coveragerc`, `sonar-project.properties` (dev-only tooling — never in `answers/requirements.txt`)
-- Done when: current-status = **all gates green locally** (ruff clean, 7 tests OK, 100% coverage,
-  bandit 0 issues, leak guard intact, eval gate passing); *outcome pending first real push to a
-  remote to verify the hosted pipeline runs green.*
+- Done when: **DONE and verified (2026-11-10, run 42763791893 — all 6 jobs green on GitHub's
+  hosted runners)**: leak-guard, ruff, tests × (3.9, 3.11) incl. selftest `run_eval` + eval gate,
+  coverage + Sonar (publish skipped without `SONAR_TOKEN`), gitleaks/bandit/pip-audit.
+  Root causes fixed along the way: (1) unanchored `.gitignore` pattern `snapshots/` silently
+  excluded the synthetic `harness/selftest/snapshots/` corpus from git — anchored to root and
+  committed the fixtures; (2) `ubuntu-latest` is rolling to Ubuntu 26.04 and setup-python
+  manifests for 3.9 lag the new image — jobs pinned to `ubuntu-24.04` (literal; `runs-on`
+  rejects the `env` context); (3) runner-bundled setuptools 79.0.1 has open CVEs (PYSEC-2026-3447,
+  GHSA-xmj3-9gf7-h52w) and fails pip-audit's environment scan — tooling env upgraded pre-audit.
 
 ### T1 — Fact-base v1 (widen the slice)
 
