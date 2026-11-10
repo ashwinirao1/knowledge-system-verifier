@@ -316,8 +316,10 @@ quality, security, data boundary — before any ledger row means anything.**
 - [x] Facts family excluded from conflicts views (like branch prose — R5); program questions MUST
   bind the program name (token-set match; unknown names refuse rather than leak Home$tart);
   wallet dims kept scalar (pipe-joined string) for ledger hashing.
-- NOTES.md docs + ingest cost: gated sub-extractors added after full-corpus probe; ingest
-  ~3.2 s → ~39 s (fine vs 30-min budget).
+- NOTES.md docs + ingest cost: gated sub-extractors added after full-corpus probe. Measured
+  honestly at story end (tools/profile_ingest.py): corpus load 0.4 s + actual ingest ~4 s = 0.2%
+  of the 30-min budget (the "~39 s" from mid-development probes was a timer-boundary artifact —
+  see DECISIONS.md issue 6).
 - Done when: ✅ dup-008 (1.0), dup-080 (1.0), dup-082 (1.0), dup-031 (1.0), dup-060 (1.0),
   dup-094 (1.0), dup-088 (1.0) — all zero traps, sources verified. Public eval
   0.6105 → **0.7465** (no regressions on any of the 33 prior items; 7 items gained).
@@ -406,7 +408,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S1.2 loans | 2026-11-10 | 0.585 (weighted) | 1.0 | 1.0 | — | **0.3872 public** / 0.83 selftest | dup-016/017/009/011/028 ✅ zero traps; stale_trap 0.02→0.39, tier_disambiguation 0.50→0.83; 27 real loan conflicts (mortgage hub-vs-blog, auto hub-vs-promo) rank-resolved; stale rows trust-RESOLVED not dropped (purpose-from-label family); 104 tests |
 | S1.3 cards | 2026-11-10 | 0.665 (weighted) | 1.0 | 1.0 | — | **0.4601 public** / 0.83 selftest | dup-034/035/040 ✅ zero traps; list_completeness 0→0.46, tier_disambiguation 0.83→1.00; intro-vs-standard forking value-safe; single-digit dates zero-padded; 123 tests |
 | S1.4 branch | 2026-11-10 | 0.769 (weighted) | 1.0 | 1.0 | — | **0.6105 public** / 0.83 selftest | dup-064/065/066/068/076/104 ✅ zero traps; branch_info 0→0.97; dup-102 refuse-restored after live catch (named-branch rule); should_refuse 1.00; no branch-conflict false adds (R5 text-claim policy); 141 tests |
-| S1.5 facts | 2026-11-10 | 0.7465 | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | dup-008/080/082/031/060/088/094 all 1.0 ✅ zero traps; ZERO regressions across the 33 prior items (7 gains: six 0.0→1.0 + dup-008 0.15→1.0); dup-088 = chronological series (294 in 2023; 256 in 2024 — eval expects 294 with a fresher 2025 post in every snapshot, so series replay, not fresher-wins); program binding refuses unknown names digit-free; facts excluded from conflicts (R5); ingest ~39 s; 168 tests, ruff + leak guard clean |
+| S1.5 facts | 2026-11-10 | 0.7465 | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | dup-008/080/082/031/060/088/094 all 1.0 ✅ zero traps; ZERO regressions across the 33 prior items (7 gains: six 0.0→1.0 + dup-008 0.15→1.0); dup-088 = chronological series (294 in 2023; 256 in 2024 — eval expects 294 with a fresher 2025 post in every snapshot, so series replay, not fresher-wins); program binding refuses unknown names digit-free; facts excluded from conflicts (R5); ingest ~4 s (0.2% of budget, measured via tools/profile_ingest.py); 168 tests, ruff + leak guard clean |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

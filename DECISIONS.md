@@ -246,6 +246,36 @@ costs one question; leaking costs trust in every answer.
    extractor against the page text as it actually renders, not against the
    sentence you wish existed.
 
+6. **The "39-second ingest" that wasn't.** Mid-development probes reported
+   ingest at 36–39 s, up from ~3 s before the fact extractors landed. Two
+   things were going on: the probe timers started *before* the snapshots
+   were loaded from disk (so they measured file I/O + ingest together), and
+   the extractor drafts did several expensive regex passes per page. The
+   final measurement, done properly: loading the corpus is ~0.4 s and the
+   actual ingest is ~4 s — 0.2% of its 30-minute budget. Two lessons:
+   measure what you think you are measuring (a timer boundary is a
+   measurement), and "slow" needs a denominator — the right denominator for
+   a batch job is its budget, not human impatience. `tools/profile_ingest.py`
+   exists so the phase breakdown is always one command away.
+
+7. **Why not chunk pages into a vector store?** Because ingest is the batch
+   phase and a vector store does not make it faster — it makes it slower:
+   you would embed every page at build time AND add query-embedding +
+   nearest-neighbour search to every answer, spending on both sides for a
+   benefit (semantic recall) that belongs to a different problem. The
+   retrieval question ("reworded questions") is real, and our answer is
+   layered: the claim ledger already IS semantic chunking — pages are
+   decomposed into structured claims (a rate row with its tier dimensions,
+   a program with its dollar amount), not fixed-size text windows — and the
+   deterministic BM25 fallback covers rewording, with a small embedding
+   model held behind a written kill-criterion (add ONNX embeddings only if
+   BM25 routing agreement is measured below 95%, and only in the fallback
+   tier). Embeddings-by-default would also break the offline/std-lib rules
+   (torch-class dependencies, model weights to ship) and weaken trap
+   immunity: a semantic match can retrieve a plausible-but-wrong section
+   and answer it confidently, which is precisely the failure the trap
+   questions are designed to catch.
+
 ## What we would do differently in a real production deployment
 
 The graded system is a contract-defined library; a live deployment of the
