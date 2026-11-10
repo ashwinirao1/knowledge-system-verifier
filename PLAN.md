@@ -296,5 +296,6 @@ refusal, any non-deterministic answer path, any network/key dependency in the gr
 - [ ] `requirements.txt` lists every package; clean Python 3.11 install verified
 - [ ] `NOTES.md` explains: how current is decided; which API keys (none planned)
 - [ ] `python harness/run_eval.py --submission answers --eval eval/public_eval.jsonl` runs clean from fresh clone
-- [ ] Repo contains **no** snapshot/eval data redistribution
+- [ ] Repo contains **no** kit data redistribution: no snapshots/zips, no eval outputs, and the
+      assignment PDF stays local (organizer material; graders have their own copy)
 - [ ] Repo URL + grading commit shared before the deadline
