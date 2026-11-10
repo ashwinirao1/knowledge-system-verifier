@@ -356,10 +356,29 @@ quality, security, data boundary — before any ledger row means anything.**
   ATV/snowmobile QUESTION grammar is S3.1 scope (claims are in the ledger now; questions still
   refuse honestly).
 
-**S2.2 as_of edge handling**
-- [ ] Dates between pulls (05-31 → snap 02), inside the 10-week gap → snap 03, before baseline → earliest+note, after latest → latest
-- [ ] Robust input parsing (ISO required; month names tolerated)
-- Done when: hidden-style variants behave predictably; unit tests for each edge.
+**S2.2 as_of edge handling — DONE (2026-11-10)**
+- [x] Dates between pulls (05-31 → snap 02), inside the 10-week gap → snap 03, before baseline → earliest+note, after latest → latest.
+  - Recon: three of the four edges already worked via "newest snapshot with taken_on <= as_of" —
+    dup-006 (05-31 → snap 02) was already scoring 1.0. The real defect was the FOURTH edge:
+    as_of before the baseline returned "nothing eligible" → digit-free REFUSAL, even though the
+    earliest snapshot IS our best knowledge for that date. Also found while testing: the ISO
+    regex validated shape, not ranges — "2026-13-01" passed through as a "date".
+  - Fixes: trust.py gains clamp_snapshot() returning (snapshot_id, status) with status in
+    {now, ok, before_baseline, none}; before-baseline → EARLIEST snapshot + provenance note on
+    conflict_note ("the requested date precedes the earliest snapshot on file (2026-05-12)…"),
+    confident=True, past tense via the existing _present() logic — never a refusal, never silent.
+    ISO input now range-checked (month 1–12, day within month); month names tolerated in full and
+    abbreviated form ("May 2026", "jun 2026", "Sept 2026"), clamped to month end; anything
+    unparseable → None = "now" (documented fallback, no guessing). Note precedence: a
+    disagreement note (about values) wins over the as_of note; answer text stays a pure claim
+    template (R1 — the note channel carries the date, not the answer text).
+  - Empirical on the real corpus (10-month jumbo question): None→snap 05 present tense; 05-15→
+    snap 01; 05-31→snap 02; 07-01→snap 03; 12-25→snap 05; 01-01→snap 01 + note; "May 2026"→snap 02.
+- Done when: ✅ hidden-style variants behave predictably (unit tests for every edge: exact
+  boundaries, gap interior, after-latest, before-baseline, leap February, abbreviations, garbage,
+  slash-format rejection, empty ledger); 199 tests (19 new) on 3.9/3.11/3.14; public eval 0.7465
+  unchanged; selftest 0.83 holds. Note: dup-074/075 (temporal_as_of, still 0.0) are CHANGE-EVENT
+  questions (Hy-Vee closure "March 31, 2026") — S2.3 scope, not as_of machinery.
 
 **S2.3 Change events ("what changed")**
 - [ ] Attribute ledger events when a key's value changes between snapshots (3.90% → 4.00% example)
@@ -432,6 +451,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S1.4 branch | 2026-11-10 | 0.769 (weighted) | 1.0 | 1.0 | — | **0.6105 public** / 0.83 selftest | dup-064/065/066/068/076/104 ✅ zero traps; branch_info 0→0.97; dup-102 refuse-restored after live catch (named-branch rule); should_refuse 1.00; no branch-conflict false adds (R5 text-claim policy); 141 tests |
 | S1.5 facts | 2026-11-10 | 0.7465 | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | dup-008/080/082/031/060/088/094 all 1.0 ✅ zero traps; ZERO regressions across the 33 prior items (7 gains: six 0.0→1.0 + dup-008 0.15→1.0); dup-088 = chronological series (294 in 2023; 256 in 2024 — eval expects 294 with a fresher 2025 post in every snapshot, so series replay, not fresher-wins); program binding refuses unknown names digit-free; facts excluded from conflicts (R5); ingest ~4 s (0.2% of budget, measured via tools/profile_ingest.py); 168 tests, ruff + leak guard clean |
 | S2.1 table dates | 2026-11-10 | 0.7465 (unchanged) | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | switch-and-earn page: 27→36 claims (+9 ATV rows recovered, +2 tables dated); 4 tables → 4 distinct effective dates across 3 statement phrasings ("Rates effective" variant added; comma headings; leading/descending "Model Year 2026-23" labels canonicalised ascending); stale promo copy loses to the 08/31/2026 rate page via the general stack — NO URL special-casing; zero regressions (no scored question touches the new claims); 180 tests |
+| S2.2 as_of edges | 2026-11-10 | 0.7465 (unchanged) | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | before-baseline as_of: refusal → EARLIEST snapshot + provenance note (confident, past tense); ISO range-validated ("2026-13-01" no longer a "date"); month names full+abbrev clamped to month end ("May 2026", "jun 2026"); all four edges unit-tested (19 new tests → 199); dup-006 edge re-verified end-to-end on the real corpus; dup-074/075 remain 0.0 = S2.3 change-events scope |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

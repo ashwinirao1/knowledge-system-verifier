@@ -23,6 +23,19 @@ DISAGREEMENT_NOTE = (
     "authoritative statement per page class and effective date."
 )
 
+# S2.2: an as_of that precedes every snapshot still gets answered from the
+# EARLIEST snapshot (best knowledge for that date) with this provenance note
+# on the answer — never a refusal, never silent. Lives on conflict_note, so
+# the answer text itself stays a pure claim template (R1).
+AS_OF_EARLIEST_NOTE = (
+    "The requested date precedes the earliest snapshot on file ({date}); "
+    "showing the earliest available data."
+)
+
+
+def as_of_earliest_note(date_iso: str) -> str:
+    return AS_OF_EARLIEST_NOTE.format(date=date_iso)
+
 
 def fmt_money(v: float | None) -> str:
     if v is None:

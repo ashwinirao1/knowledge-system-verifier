@@ -228,10 +228,25 @@ class CurrentTruth:
             text, _ = synth.refusal()
             return Answer(text=text, sources=[], confident=False, conflict_note=None)
         as_of_iso = trust_mod.parse_as_of(as_of)
-        snap_id = trust_mod.snapshot_id_as_of(self.ledger.snapshot_dates(), as_of_iso)
+        snap_dates = self.ledger.snapshot_dates()
+        snap_id, clamp_status = trust_mod.clamp_snapshot(snap_dates, as_of_iso)
         if snap_id is None:
             text, _ = synth.refusal()
             return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        # S2.2: an as_of before the baseline still answers (earliest snapshot),
+        # with a provenance note. A disagreement note (about the values) takes
+        # precedence when a family path sets one; the as_of note never overrides.
+        as_of_note = (
+            synth.as_of_earliest_note(min(snap_dates.values()))
+            if clamp_status == "before_baseline"
+            else None
+        )
+        ans = self._answer_dispatch(slots, snap_id, as_of_iso)
+        if as_of_note and ans.conflict_note is None:
+            ans.conflict_note = as_of_note
+        return ans
+
+    def _answer_dispatch(self, slots: dict, snap_id: str, as_of_iso: str | None) -> Answer:
         if slots["family"] == "deposit":
             return self._answer_deposit(slots, snap_id, as_of_iso)
         if slots["family"] == "loans":

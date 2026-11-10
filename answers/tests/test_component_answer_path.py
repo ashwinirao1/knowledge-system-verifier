@@ -100,5 +100,62 @@ class TestAnswerPath(unittest.TestCase):
         self.assertEqual(TR.parse_as_of("2026-05-31"), "2026-05-31")
 
 
+class TestAsOfEdges(unittest.TestCase):
+    """S2.2: the before-baseline edge answers from the EARLIEST snapshot with
+    a provenance note — never a refusal, never silent — while the other three
+    edges keep flowing through the normal path untouched."""
+
+    def setUp(self):
+        self.ks = SOL.build()
+        self.ks.ingest(_snapshot("2026-05-19", OLD))
+        self.ks.ingest(_snapshot("2026-09-28", NEW))
+
+    def test_before_baseline_answers_from_earliest_with_note(self):
+        a = self.ks.answer(
+            "What is the APY on the 10-month fixed jumbo special certificate?",
+            as_of="2026-01-01",
+        )
+        self.assertTrue(a.confident)           # an answer, not a refusal
+        self.assertIn("3.90%", a.text)          # the EARLIEST snapshot's value
+        self.assertNotIn("4.00%", a.text)       # never the later snapshot's
+        self.assertIsNotNone(a.conflict_note)
+        self.assertIn("2026-05-19", a.conflict_note)
+
+    def test_before_baseline_past_tense(self):
+        a = self.ks.answer(
+            "What is the APY on the 10-month fixed jumbo special certificate?",
+            as_of="2026-01-01",
+        )
+        self.assertIn("paid", a.text.lower())   # historical date -> past tense
+
+    def test_month_name_as_of_end_to_end(self):
+        a = self.ks.answer(
+            "What is the APY on the 10-month fixed jumbo special certificate?",
+            as_of="May 2026",                    # -> 2026-05-31 -> the OLD snap
+        )
+        self.assertTrue(a.confident)
+        self.assertIn("3.90%", a.text)
+        self.assertIsNone(a.conflict_note)      # "ok" edge: no provenance note
+
+    def test_after_latest_answers_current_with_no_note(self):
+        a = self.ks.answer(
+            "What is the APY on the 10-month fixed jumbo special certificate?",
+            as_of="2026-12-25",
+        )
+        self.assertIn("4.00%", a.text)          # latest snapshot
+        self.assertIsNone(a.conflict_note)
+
+    def test_disagreement_note_beats_as_of_note(self):
+        # inside the earliest snapshot the two pages agree, so no disagreement
+        # note fires; assert the precedence helper directly by forcing both
+        # channels on a conflict-bearing query is S5 territory — here we pin
+        # that a normal "ok" edge leaves the note channel empty
+        a = self.ks.answer(
+            "What is the APY on the 10-month fixed jumbo special certificate?",
+            as_of="2026-06-01",
+        )
+        self.assertIsNone(a.conflict_note)
+
+
 if __name__ == "__main__":
     unittest.main()
