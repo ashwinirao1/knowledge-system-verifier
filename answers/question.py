@@ -104,6 +104,45 @@ def _parse_cards(q: str) -> dict | None:
     }
 
 
+# ----------------------------------------------------------------- branch (S1.4)
+_HOURS_TRIGGER_RE = re.compile(r"\bhours?\b|\bopen\b|\bclos", re.I)
+_DRIVE_UP_RE = re.compile(r"\bdrive[- ]?up\b|\bdrive.?thru\b|\bdrive.?through\b", re.I)
+_ADDRESS_TRIGGER_RE = re.compile(r"\baddress\b|\blocated\b|\bwhere is\b", re.I)
+_HYVEE_RE = re.compile(r"\bhy-?vee\b", re.I)
+_ALL_SAME_RE = re.compile(r"\ball\b.*\bsame\b|\bsame\b.*\ball\b|every branch", re.I)
+
+
+def _parse_branch(q: str) -> dict | None:
+    # a NAMED branch ("... hours for the Mullan Avenue branch") makes the item
+    # branch-specific: only claims for that branch may be used or it's a refuse
+    named = None
+    m = re.search(
+        r"for the ([a-z0-9'\- ]{3,40}?) branch(?:\?|$)|at the ([a-z0-9'\- ]{3,40}?) branch",
+        q,
+    )
+    if m:
+        named = (m.group(1) or m.group(2)).strip()
+    if _HOURS_TRIGGER_RE.search(q):
+        mode = "hours_drive_up" if _DRIVE_UP_RE.search(q) else "hours_lobby"
+        if _ALL_SAME_RE.search(q) and not _DRIVE_UP_RE.search(q):
+            mode = "hours_same"
+        return {
+            "family": "branch",
+            "mode": mode,
+            "channel": "drive_up" if _DRIVE_UP_RE.search(q) else "lobby",
+            "branch_name": named,
+        }
+    if _HYVEE_RE.search(q):
+        return {"family": "branch", "mode": "hyvee_alternatives"}
+    if _ADDRESS_TRIGGER_RE.search(q):
+        m = re.search(r"\b([a-z]{4,})\s+branch\b|\bbranch\s+(?:in|at)\s+([a-z]{4,})\b", q)
+        city = (m.group(1) or m.group(2)).lower() if m else None
+        if city is None and named:
+            city = named
+        return {"family": "branch", "mode": "address", "city": city}
+    return None
+
+
 def _parse_loan(q: str) -> dict | None:
     # ARM / non-conventional products are not on any rate sheet corpus-wide:
     # answering with the fixed-conventional tiers would be a wrong-fact answer.
@@ -162,7 +201,10 @@ def parse_question(question: str) -> dict | None:
     slots = _parse_loan(q)
     if slots:
         return slots
-    return _parse_cards(q)
+    slots = _parse_cards(q)
+    if slots:
+        return slots
+    return _parse_branch(q)
 
 
 def _parse_certificate(q: str) -> dict | None:

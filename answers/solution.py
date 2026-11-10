@@ -40,6 +40,7 @@ if _answers not in sys.path:
 import hashlib  # noqa: E402
 import json  # noqa: E402
 
+import branches as branches_mod  # noqa: E402
 import cards as cards_mod  # noqa: E402
 import certificates as certificates_mod  # noqa: E402
 import classify as classify_mod  # noqa: E402
@@ -58,6 +59,7 @@ PRODUCT = "certificate"
 DEPOSIT_PRODUCT = "deposit"
 LOAN_PRODUCT = "loans"
 CARDS_PRODUCT = "cards"
+BRANCH_PRODUCT = "branch"
 
 
 def _content_hash(product: str, metric: str, tier_dims: dict, value_text: str, eff: str | None) -> str:
@@ -103,6 +105,8 @@ class CurrentTruth:
                 self._store_card_claim(claim, page, page_type, rank, snap_id, snap_date)
         for claim in certificates_mod.extract_prose_certificates(text):
             self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
+        for claim in branches_mod.extract_branches(text):
+            self._store_branch_claim(claim, page, page_type, rank, snap_id, snap_date)
 
     def _store_claim(self, claim: dict, page, page_type: str, rank: float,
                      snap_id: str, snap_date: str) -> None:
@@ -178,6 +182,20 @@ class CurrentTruth:
             quote=claim.get("quote"), content_hash=content_hash,
         )
 
+    def _store_branch_claim(self, claim: dict, page, page_type: str, rank: float,
+                            snap_id: str, snap_date: str) -> None:
+        dims = {**claim["tier_dims"]}
+        value = claim["value"]
+        value_text = claim.get("value_text", "")
+        content_hash = _content_hash(BRANCH_PRODUCT, "text", dims, value_text, None)
+        self.ledger.add_claim(
+            product=BRANCH_PRODUCT, metric="text", tier_dims=dims, value=value,
+            value_text=value_text, min_earn=None,
+            effective_date=None, page_url=page.url, page_type=page_type,
+            page_rank=rank, snapshot_id=snap_id, snapshot_date=snap_date,
+            quote=claim.get("quote"), content_hash=content_hash,
+        )
+
     def answer(self, question: str, as_of: Optional[str] = None) -> Answer:
         slots = question_mod.parse_question(question)
         if not slots:
@@ -194,6 +212,8 @@ class CurrentTruth:
             return self._answer_loans(slots, snap_id, as_of_iso)
         if slots["family"] == "cards":
             return self._answer_cards(slots, snap_id, as_of_iso)
+        if slots["family"] == "branch":
+            return self._answer_branch(slots, snap_id, as_of_iso)
         claims = self.ledger.all_claims_snapshot(snap_id, PRODUCT, slots["metric"])
         # tier filter: exact dims we know, leave unspecified dims open
         kept = []
@@ -472,6 +492,73 @@ class CurrentTruth:
             conflict_note=note,
         )
 
+    # ---------------------------------------------------------------- branch
+    def _answer_branch(self, slots: dict, snap_id: str, as_of_iso: str | None) -> Answer:
+        """Branch knowledge: hours / addresses / relocation notices.
+
+        Text claims (value=0.0); trust resolution only dedups replicas —
+        different branches legitimately differ, so these families stay OUT of
+        the conflicts views (R5).
+        """
+        claims = self.ledger.all_claims_snapshot(snap_id, BRANCH_PRODUCT, "text")
+        winners = list(trust_mod.pick_winners(claims).values())
+        mode = slots["mode"]
+
+        if mode in ("hours_lobby", "hours_drive_up", "hours_same"):
+            channel = "drive_up" if mode == "hours_drive_up" else "lobby"
+            kept = [c for c in winners if c.tier_dims.get("kind") == "branch_hours"]
+            # branch-specific hours: only that branch's own statement may be
+            # used — otherwise we would bolt other branches' schedules onto a
+            # branch that is not on file (the honest move is to refuse).
+            branch_name = slots.get("branch_name")
+            if mode != "hours_same" and branch_name:
+                named_lower = branch_name
+                on_file = [
+                    c for c in kept
+                    if (c.tier_dims.get("branch") or "") == named_lower
+                    or (bool(c.tier_dims.get("branch"))
+                        and c.tier_dims.get("branch") in named_lower)
+                    or named_lower in (c.tier_dims.get("branch") or "")
+                ]
+                if not on_file:
+                    text, _ = synth.refusal()
+                    return Answer(text=text, sources=[], confident=False, conflict_note=None)
+            if mode != "hours_same" and branch_name and on_file:
+                text = synth.branch_hours(on_file, channel, same_question=False)
+                chosen = sorted(
+                    [c for c in on_file if c.tier_dims.get("channel") == channel],
+                    key=lambda c: (c.tier_dims.get("schedule", ""), c.page_url),
+                )
+            else:
+                text = synth.branch_hours(kept, channel, same_question=(mode == "hours_same"))
+                chosen = sorted(
+                    [c for c in kept if c.tier_dims.get("channel") == channel],
+                    key=lambda c: (c.tier_dims.get("schedule", ""), c.page_url),
+                )
+        elif mode == "address":
+            city = slots.get("city")
+            kept = [c for c in winners if c.tier_dims.get("kind") == "branch_address"]
+            chosen = [c for c in kept if not city or c.tier_dims.get("city") == city]
+            text = synth.branch_address(chosen)
+        elif mode == "hyvee_alternatives":
+            kept = [c for c in winners if c.tier_dims.get("kind") == "branch_notice"]
+            chosen = kept
+            text = synth.branch_hyvee_alternatives(chosen)
+        else:
+            text, _ = synth.refusal()
+            return Answer(text=text, sources=[], confident=False, conflict_note=None)
+
+        if not chosen or text == synth.REFUSAL:
+            text, _ = synth.refusal()
+            return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        src = sorted(chosen, key=lambda c: (-c.page_rank, c.page_url))[0]
+        return Answer(
+            text=text,
+            sources=[Source(url=src.page_url, snapshot_id=snap_id, quote=src.quote)],
+            confident=True,
+            conflict_note=None,
+        )
+
     def _present(self, snap_id: str, as_of_iso: str | None) -> bool:
         return as_of_iso is None or snap_id == trust_mod.snapshot_id_as_of(self.ledger.snapshot_dates(), None)
 
@@ -482,6 +569,13 @@ class CurrentTruth:
 
 def trust_key(c) -> tuple:
     d = c.tier_dims
+    kind = d.get("kind")
+    if kind == "branch_hours":
+        return ("branch_hours", d.get("channel"), d.get("branch"), d.get("schedule"))
+    if kind == "branch_address":
+        return ("branch_address", d.get("address_display"))
+    if kind == "branch_notice":
+        return ("branch_notice", d.get("alternatives"))
     if d.get("kind") == "card":  # cards
         return (d["card"], d.get("rate_period"))
     if "family" in d:  # loans

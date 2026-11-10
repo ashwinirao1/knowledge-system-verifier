@@ -270,10 +270,26 @@ quality, security, data boundary — before any ledger row means anything.**
   Card claims +5; conflicts unchanged at 27 (card statements agree corpus-wide — no false
   positives added); selftest 0.83; 123 tests.
 
-**S1.4 Branch knowledge** (hours, addresses, closures)
-- [ ] `/contact` locator parse: branch → {lobby, drive-up} hours, address; closure events from newsroom (Hy-Vee → closed 2026-03-31, replaced by Key West + Sycamore)
-- [ ] "Varies by branch" aggregation answer pattern
-- Done when: dup-064/065/066/068/074/075/076/104 pass; dup-102 (Mullan) refuses without hallucination.
+**S1.4 Branch knowledge — DONE (2026-11-10)**
+- [x] Prose extractors (`answers/branches.py`), not tables: lobby/drive-up hour blocks
+  (anchored on "Branch hours are:", inline `**Lobby** Monday…` first entries, dash-normalized so
+  identical schedules across pages merge as replicas), contact-page locator addresses
+  (`Dupaco Branch` + address lines → city/state/zip/display), and the Hy-Vee relocation notice
+  ("full-service branches at Key West and Sycamore Street")
+- [x] Text claims (value=0.0, the schedule/address/alternatives IS the fact) — deliberately kept
+  OUT of the conflict views: different branches legitimately publish different schedules (R5 —
+  branch variance is not a same-key contradiction); conflicts stayed at 27 with zero false adds
+- [x] Question grammar (`question.py::_parse_branch`): hours (lobby/drive-up/all-same), address
+  (+ city), Hy-Vee alternatives; **named-branch questions refuse when the branch is not on file**
+  (dup-102 "Mullan Avenue branch" — bolted-on other branches' schedules would fabricate a fact;
+  caught live, restored should_refuse 0.67→1.00 after the first eval run)
+- Done when: ✅ **dup-064 (8:30), dup-065 (8:30, never demands a ZIP), dup-066 (8 a.m./6 p.m.),
+  dup-068 (11375 Oldenburg + 61036), dup-076 (Key West + Sycamore, no CO-OP), dup-104 (No — two+
+  schedules, 12:30 AND noon)** — all zero traps. Public eval 0.4601 → **0.6105**
+  (branch_info 0.00→**0.97**, should_refuse holds 1.00 after the named-branch fix, no regressions
+  anywhere). Consistency 1.0 (paraphrase + repeat), zero traps, ingest 3.2 s; 141 tests.
+- Remaining polish items deferred to hidden-eval prep (dup-074/075 hour nuances, closure-date
+  phrasing refinement).
 
 **S1.5 Canonical links, programs, misc facts**
 - [ ] Link extractor for current nav/CTA links (`join.dupaco.com`, `/contact`, `/personal/savings-account#rates`) with authority rules vs legacy links in old pages
@@ -341,6 +357,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S1.1 deposits | 2026-11-10 | 0.485 (weighted) | 1.0 | 1.0 | — | **0.2671 public** / 0.83 selftest | dup-045/046/049/052 ✅ zero traps; tier_disambiguation 0.17→0.50, current_value 0→0.33, conflict_resolution 0→0.33, entity_attribution 0→0.25; 6 false achieve-MM conflicts killed via rate_period qualifier dim (no URL special-casing); 82 tests |
 | S1.2 loans | 2026-11-10 | 0.585 (weighted) | 1.0 | 1.0 | — | **0.3872 public** / 0.83 selftest | dup-016/017/009/011/028 ✅ zero traps; stale_trap 0.02→0.39, tier_disambiguation 0.50→0.83; 27 real loan conflicts (mortgage hub-vs-blog, auto hub-vs-promo) rank-resolved; stale rows trust-RESOLVED not dropped (purpose-from-label family); 104 tests |
 | S1.3 cards | 2026-11-10 | 0.665 (weighted) | 1.0 | 1.0 | — | **0.4601 public** / 0.83 selftest | dup-034/035/040 ✅ zero traps; list_completeness 0→0.46, tier_disambiguation 0.83→1.00; intro-vs-standard forking value-safe; single-digit dates zero-padded; 123 tests |
+| S1.4 branch | 2026-11-10 | 0.769 (weighted) | 1.0 | 1.0 | — | **0.6105 public** / 0.83 selftest | dup-064/065/066/068/076/104 ✅ zero traps; branch_info 0→0.97; dup-102 refuse-restored after live catch (named-branch rule); should_refuse 1.00; no branch-conflict false adds (R5 text-claim policy); 141 tests |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

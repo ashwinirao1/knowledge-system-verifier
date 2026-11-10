@@ -9,6 +9,8 @@ R1 rails implemented here, hard:
 """
 from __future__ import annotations
 
+import re
+
 from ledger import Claim
 
 REFUSAL = (
@@ -277,3 +279,49 @@ def card_standard(claims: list[Claim], present_tense: bool = True) -> str:
 
 def refusal() -> tuple[str, None]:
     return REFUSAL, None
+
+
+# -------------------------------------------------------------------- branch
+def _sched_norm(text: str) -> str:
+    """Deterministic schedule address text (dashes unified)."""
+    return re.sub(r"[–—]", "-", text or "")
+
+
+def branch_hours(claims: list[Claim], channel: str, same_question: bool) -> str:
+    """Distinct schedules, deterministic order; straight 'No' when asked if all same."""
+    scheds = sorted({
+        _sched_norm(c.tier_dims.get("schedule", ""))
+        for c in claims if c.tier_dims.get("channel") == channel
+    } - {""})
+    if not scheds:
+        return REFUSAL
+    channel_word = "drive-up" if channel == "drive_up" else "lobby"
+    if len(scheds) == 1:
+        verb_z = "Branch" if not same_question else "Yes — all branches on file keep the same"
+        text = f"{verb_z} {channel_word} hours are: {scheds[0]}."
+        if same_question:
+            text = f"Yes — all branches on file keep the same {channel_word} hours: {scheds[0]}."
+        return text
+    if same_question:
+        return ("No — at least two lobby schedules are on file: "
+                + "; or ".join(s for s in scheds) + ".")
+    return (f"Branch {channel_word} hours vary by branch. Schedules on file: "
+            + "; or ".join(scheds) + ".")
+
+
+def branch_address(claims: list[Claim], present_tense: bool = True) -> str:
+    if not claims:
+        return REFUSAL
+    c = sorted(claims, key=lambda x: x.tier_dims.get("address_display", ""))[0]
+    d = c.tier_dims
+    return (f"The {d.get('city_display', d.get('city'))} branch is at "
+            f"{d.get('address_display')}.")
+
+
+def branch_hyvee_alternatives(claims: list[Claim], present_tense: bool = True) -> str:
+    if not claims:
+        return REFUSAL
+    alts = claims[0].tier_dims.get("alternatives", "")
+    return (f"Members can access the same full-service banking at the "
+            f"{alts} branches.")
+
