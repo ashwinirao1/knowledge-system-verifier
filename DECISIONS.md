@@ -87,6 +87,55 @@ larger scale) for backups and multi-user access; that is a deployment
 difference, not a redesign. The claim schema and the trust logic would not
 change, which is the point.
 
+### Decision 2 continued — how this scales to live data, a fleet of servers
+
+The graded system is single-process. Asked honestly: "what happens with live
+data, a large corpus, and a fleet of app servers answering questions? Should
+we add Redis so answers survive a server dying?" The answer is yes to Redis,
+but not on the answering path — and the starting point is a property the
+design already has:
+
+**The ledger is derived state.** The source of truth is the snapshot corpus —
+immutable, versioned input files. Every app server can rebuild its entire
+index from scratch (ingest takes well under a minute at this scale). Because
+no data lives *only* in an app server, a server dying costs a warm-up, never
+data. That is the "cattle not pets" model, and it is the thing to protect
+before adding any infrastructure.
+
+**Why Redis should not be the primary answering store:**
+
+1. Redis is also in-RAM. If the index fits in one server's memory, putting it
+   in a Redis cluster means paying more per gigabyte for the same bytes, plus
+   replicating them fleet-wide.
+2. The network hop undoes the design point. A local memory lookup is on the
+   order of 100 nanoseconds; a Redis round-trip is 0.2–1 millisecond. That is
+   roughly a 1000x penalty on the hot path of a system whose selling point is
+   sub-millisecond, deterministic answers.
+3. Redis durability is best-effort (RDB/AOF snapshots). It is a cache and
+   coordination tool by design; durable shared state belongs in Postgres.
+4. Version skew. Two servers reading one mutable shared store mid-update can
+   serve different versions of "the truth" — precisely the fleet-wide
+   inconsistency the determinism rules exist to prevent.
+
+**The production shape, in three stages:**
+
+| Stage | Data scale | Answer path | Redis's role |
+|---|---|---|---|
+| 1 — this repo | Fits in one process | in-process in-memory index, rebuilt on boot | none needed |
+| 2 — real fleet | still fits per server | index-as-artifact: the build pipeline publishes a versioned index file to object storage; every server loads it into local memory at boot and hot-swaps on publish | "current version" pointer, publish notifications (pub/sub), cache for expensive fallback queries |
+| 3 — genuinely shared | too big for one server, or many writers | shared store chosen by query shape: Postgres read replicas for relational claims, a search engine if the BM25 fallback needs scale | front-line cache, rate limiting |
+
+Stage 2 is the sweet spot for this architecture: an app-local in-memory index
+with Redis as the *control plane* — version pointer, invalidation, caching —
+never the data plane for answers.
+
+The deeper reason index-as-artifact beats a shared mutable store is **atomic
+version swaps**: each server serves exactly one immutable artifact version,
+and publishing a new index is flipping a pointer. A server that dies
+mid-rollout comes back on the new version; no server is ever half-updated.
+That is the fleet-scale version of the same idea as snapshot clamping:
+every answer names the version of truth it used.
+
 ## Decision 3 — Keep every value forever (append-only)
 
 **Decision:** when a rate changes between snapshots, the old value stays in
