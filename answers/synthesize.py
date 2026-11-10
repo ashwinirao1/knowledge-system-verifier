@@ -140,5 +140,74 @@ def deposit_do_any_no(top: Claim, metric: str, present_tense: bool = True) -> st
             f"{fmt_rate(top)}{phrase}.")
 
 
+# --------------------------------------------------------------------- loans
+_LOAN_METRIC_WORD = {"apr": "APR", "rate": "rate"}
+
+
+def _model_range_label(dims: dict) -> str:
+    if dims.get("model_older"):
+        return f"{int(dims['model_to'])} model-year and older"
+    return f"{int(dims['model_from'])}-{int(dims['model_to']) % 100} model-year"
+
+
+def loan_answer(claims: list[Claim], slots: dict, present_tense: bool = True) -> str:
+    """Winners already trust-collapsed; group by tier key so rate+APY-like APR
+    columns pair into one phrase per tier. Deterministic ordering."""
+    word = _LOAN_METRIC_WORD.get(slots.get("metric", "rate"), "rate")
+    fam = slots["loan_family"]
+    by_tier: dict[tuple, dict] = {}
+    for c in claims:
+        key = tuple(sorted((k, v) for k, v in c.tier_dims.items() if k != "metric"))
+        by_tier.setdefault(key, {})[c.metric] = c
+
+    if fam == "mortgage":
+        parts = []
+        for key, metrics in by_tier.items():
+            d = dict(key)
+            bits = []
+            if metrics.get("rate"):
+                bits.append(f"{fmt_rate(metrics['rate'])} rate")
+            if metrics.get("apr"):
+                bits.append(f"{fmt_rate(metrics['apr'])} APR")
+            label = f"{d['term_years']}-Year Fixed Conventional"
+            if d.get("amount_tier"):
+                label += f" {d['amount_tier']}"
+            parts.append(f"{label}: " + " / ".join(bits))
+        if not parts:
+            return REFUSAL
+        return "Currently, " + parts[0] + ("." if len(parts) == 1 else
+                                            "; " + "; ".join(parts[1:]) + ".")
+
+    parts = []
+    for key, metrics in by_tier.items():
+        d = dict(key)
+        c = metrics.get("apr") or metrics.get("rate")
+        if not c:
+            continue
+        qualifier = []
+        if d.get("model_from") is not None or d.get("model_older"):
+            qualifier.append(_model_range_label(d))
+        if d.get("term_months"):
+            qualifier.append(f"{int(d['term_months'])}-month")
+        elif d.get("term_years"):
+            qualifier.append(f"{int(d['term_years'])}-year")
+        if d.get("amount_tier"):
+            qualifier.append(str(d["amount_tier"]).replace("$", "$"))
+        family_word = d.get("family_display") or d.get("family", "loan")
+        if fam == "auto" and qualifier:
+            q = " ".join(qualifier)
+            parts.append(f"{c.tier_dims['family_display']} {word} on a {q} loan is "
+                         f"{fmt_rate(c)}")
+        else:
+            q = " ".join(qualifier) if qualifier else ""
+            parts.append(
+                f"{family_word} {word}{(' for a ' + q + ' loan') if q else ''} is {fmt_rate(c)}"
+            )
+    if not parts:
+        return REFUSAL
+    return "Currently, the " + parts[0] + ("." if len(parts) == 1 else
+                                            "; " + "; ".join(parts[1:]) + ".")
+
+
 def refusal() -> tuple[str, None]:
     return REFUSAL, None

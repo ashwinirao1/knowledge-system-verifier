@@ -55,6 +55,67 @@ _TIER_RANGE_RE = re.compile(
 _TIER_RANGE_ALT_RE = re.compile(r"\$([\d,]+(?:\.\d+)?)\s*(?:-|–|to)\s*\$([\d,]+(?:\.\d+)?)", re.I)
 
 
+# ---------------------------------------------------------------- loans (S1.2)
+_LOAN_FAMILY_RES = [
+    (re.compile(r"\bmortgage|home\s+loan\b", re.I), "mortgage"),
+    (re.compile(r"\brefinanc", re.I), "mortgage"),
+    (re.compile(r"\bhome\s+equity|heloc\b", re.I), "home_equity"),
+    (re.compile(r"\bhome\s+improvement\b", re.I), "home_improvement"),
+    (re.compile(r"\bboat\b|\brv\b|\brecreational\b", re.I), "boat_rv"),
+    (re.compile(r"\bpersonal\s+loans?\b", re.I), "personal"),
+    (re.compile(r"\bauto\b|\bcar\b|\bvehicle\b|\bmotorcycle\b", re.I), "auto"),
+]
+_MODEL_YEAR_Q_RE = re.compile(
+    r"\b(?:model[- ]year\s*(?:vehicle)?\s*)?(20\d\d)\b", re.I
+)
+_TERM_YEARS_RE = re.compile(r"\b(\d{1,2})\s*[-\s]?years?\b", re.I)
+
+
+def _parse_loan(q: str) -> dict | None:
+    # ARM / non-conventional products are not on any rate sheet corpus-wide:
+    # answering with the fixed-conventional tiers would be a wrong-fact answer.
+    if re.search(r"\badjustable\b|\barm\b|5/1|7/1", q, re.I):
+        return None
+    fam = None
+    for rx, f in _LOAN_FAMILY_RES:
+        if rx.search(q):
+            fam = f
+            break
+    if not fam:
+        return None
+
+    metric = "apr" if re.search(r"\bapr\b", q) else "rate"
+    term_months = None
+    term_years = None
+    m = _MONTHS_RE.search(q)
+    if m:
+        term_months = int(m.group(1))
+    else:
+        my = _TERM_YEARS_RE.search(q)
+        if my:
+            term_years = int(my.group(1))
+    model_year = None
+    mm = _MODEL_YEAR_Q_RE.search(q)
+    if mm:
+        model_year = int(mm.group(1))
+        # "model-year" phrasing only; a bare year+vehicle mentions count too
+    if model_year is None and re.search(r"\bvehicle\b|\bcar\b", q):
+        mm = re.search(r"\b(20\d\d)\b", q)
+        if mm:
+            model_year = int(mm.group(1))
+    refinance = bool(re.search(r"\brefinanc", q))
+    return {
+        "family": "loans",
+        "loan_family": fam,
+        "metric": metric,
+        "term_months": term_months,
+        "term_years": term_years,
+        "model_year": model_year,
+        "refinance": refinance,
+        "member": "business" if re.search(r"\bbusiness\b", q) else "personal",
+    }
+
+
 def parse_question(question: str) -> dict | None:
     """Return the family's slots, or None when no family can be identified."""
     q = (question or "").lower().strip()
@@ -62,7 +123,10 @@ def parse_question(question: str) -> dict | None:
         return None
     if _CERT_RE.search(q):
         return _parse_certificate(q)
-    return _parse_deposit(q)
+    slots = _parse_deposit(q)
+    if slots:
+        return slots
+    return _parse_loan(q)
 
 
 def _parse_certificate(q: str) -> dict | None:

@@ -222,10 +222,33 @@ quality, security, data boundary — before any ledger row means anything.**
   0→0.33, entity_attribution 0→0.25, no regressions). Ingest 2.6 s; +24 deposit claims; selftest
   unchanged (0.83, conflicts F1 1.0).
 
-**S1.2 Loan families** (auto w/ model-year tiers & terms, personal, mortgage tiers incl. loan-amount
-tiers, home-improvement)
-- [ ] Term + model-year + loan-amount tier parser; effective-date capture from the *same table*
-- Done when: dup-016/017 (5.39%/5.59%, trap 5.34 avoided), dup-009/011 (7.13/7.25, traps avoided), dup-028 (10.49%) pass.
+**S1.2 Loan families — DONE (2026-11-10)**
+- [x] Row-grammar extractor (`answers/loans.py`) — headers drift everywhere, so the ROW grammar
+  decides: model-year labels (`2024-27 Model Year` → (2024, 2027); `2016 … (and older)` → open
+  range), mortgage labels (`Purchase: 30-Year Fixed Conventional $832,750 or less` — **purpose
+  prefix in the label owns the family**, so a stale purchase sheet under a bare "Home Loans"
+  heading lands in the same canonical keys as the hub rows it competes with), term-only rows
+  (personal), amount-tier+term rows (boat-RV / home-improvement), HELOC variant rows; every
+  family with a Term column gets `term_months` attached
+- [x] Effective-date capture from the same table (incl. single-digit `1/1/2026` — widened the
+  table-level date regex)
+- [x] Question grammar (`question.py::_parse_loan`): family/auto+car+vehicle/mortgage(personal
+  loans)/boat&rv/home-improvement/home-equity; APR vs rate (with metric fallback when a family
+  only publishes one); months/years; model-year coverage; refrained from claiming ARM products
+  (guard: adjustable/5-1/7-1 → refuse, kept the wrong-family unit test green)
+- [x] Trap defence by the trust stack, zero special-casing: stale promo/calculator/blog copies of
+  the rate sheets stay live in the latest snapshot ("2023–26 60 mo → 5.34%" on promo vs
+  "2024-27 60 mo → 5.39%" on the hub both cover a "2025 model-year vehicle") — question-time
+  selection filters to covering ranges, then rank collapses each term to the rate-sheet row
+- [x] Templates (`synthesize.py::loan_answer`): mortgage amount-tiers ASC lead + term groups
+  30→20→15, rate/APR pairs per tier; generic qualifier line for the other families
+- Done when: ✅ **dup-016 (5.39%, trap 5.34 avoided), dup-017 (5.59%, trap 5.54 avoided),
+  dup-009 (7.13/7.25, traps 6.037/6.061/5.954 avoided), dup-011 ($100k tier ledes, 7.13 included,
+  "6.7%" numeric-match safe vs 6.75%, 6.037 avoided), dup-028 (10.49%) — all zero traps**.
+  Public eval 0.2671 → **0.3872** (stale_trap 0.02→0.39, tier_disambiguation 0.50→0.83, no
+  regressions anywhere). 27 real same-key loan conflicts now surface (mortgage purchase+refi
+  hub-vs-blog, auto hub-vs-promo), all rank-resolved; selftest unchanged (0.83, F1 1.0);
+  +751 loan claims; ingest 2.8 s; 104 tests.
 
 **S1.3 Cards (personal + business)** incl. intro vs standard APR qualifiers
 - [ ] Card entity + standard vs intro APR dims (intro duration e.g. 90 days)
@@ -300,6 +323,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S0.2+S0.3 tracer (certs) | 2026-11-10 | 0.402 (weighted) | 1.0 | 1.0 (p50 0.0s) | — | **0.1508** | public eval: dup-001 ✅ byte-exact, dup-006 ✅, dup-145 ✅ + 2 more refusals; ingest 1.9–3.4 s for 5 snapshots (3266 pages) |
 | S0.4 conflicts | 2026-11-10 | 0.8 (selftest qa) | 1.0 | 1.0 | **1.0** (F1 1.0, resolution 1.0) | **0.83 selftest** / **0.1508 public** | gold c1 matched w/ correct winner; 0 real-corpus conflicts is truthful (cert rates only in tables); 58 tests, coverage 88% |
 | S1.1 deposits | 2026-11-10 | 0.485 (weighted) | 1.0 | 1.0 | — | **0.2671 public** / 0.83 selftest | dup-045/046/049/052 ✅ zero traps; tier_disambiguation 0.17→0.50, current_value 0→0.33, conflict_resolution 0→0.33, entity_attribution 0→0.25; 6 false achieve-MM conflicts killed via rate_period qualifier dim (no URL special-casing); 82 tests |
+| S1.2 loans | 2026-11-10 | 0.585 (weighted) | 1.0 | 1.0 | — | **0.3872 public** / 0.83 selftest | dup-016/017/009/011/028 ✅ zero traps; stale_trap 0.02→0.39, tier_disambiguation 0.50→0.83; 27 real loan conflicts (mortgage hub-vs-blog, auto hub-vs-promo) rank-resolved; stale rows trust-RESOLVED not dropped (purpose-from-label family); 104 tests |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

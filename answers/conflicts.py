@@ -31,6 +31,28 @@ def _key_of(c) -> tuple:
 def _topic_text(claim) -> str:
     """Human topic from canonical dims — member phrasing ("6-Month certificate APY")."""
     d = claim.tier_dims
+    if "family" in d:  # loans
+        bits = []
+        if d.get("family_display"):
+            bits.append(d["family_display"])
+        if d.get("purpose") and d.get("purpose") != (d.get("family_display") or "").lower():
+            bits.append(d["purpose"])
+        if d.get("model_older"):
+            bits.append(f"{int(d['model_to'])} model-year and older")
+        elif d.get("model_from") is not None:
+            bits.append(f"{int(d['model_from'])}-{int(d['model_to']) % 100} model-year")
+        if d.get("term_years"):
+            bits.append(f"{int(d['term_years'])}-year")
+        elif d.get("term_months"):
+            bits.append(f"{int(d['term_months'])}-month")
+        if d.get("amount_tier"):
+            bits.append(str(d["amount_tier"]))
+        if d.get("amount_tier") is None and d.get("amount_low") is not None:
+            bits.append(f"${d['amount_low']:,.0f} tier")
+        if d.get("variant"):
+            bits.append(str(d["variant"]))
+        word = "APR" if claim.metric == "apr" else "rate"
+        return (f"{' '.join(bits)} {word}").strip()
     if "product" in d:  # deposit family
         from synthesize import tier_display  # local sibling import (no cycle at import time)
         word = "dividend rate" if claim.metric == "dividend_rate" else "APY"
@@ -81,6 +103,8 @@ _FAMILY_VIEWS = (
     ("certificate", "apy"),
     ("deposit", "apy"),
     ("deposit", "dividend_rate"),
+    ("loans", "apr"),
+    ("loans", "rate"),
 )
 
 

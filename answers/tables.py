@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 _TABLE_LEVEL_DATE_RE = re.compile(
-    r"^\s*(?:\*{1,2}|\_)?\s*Rates are effective as of\s+(\d{2})/(\d{2})/(\d{4})",
+    r"^\s*(?:\*{1,2}|\_)?\s*Rates are effective as of\s+(\d{1,2})/(\d{1,2})/(\d{4})",
     re.I,
 )
 _CELL_SPLIT_RE = re.compile(r"\s*\|\s*")

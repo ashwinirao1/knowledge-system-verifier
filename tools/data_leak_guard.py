@@ -40,6 +40,12 @@ ALLOWED_CONTENT_FILES = {
     # test; all dates/URLs fake (example.org) — no corpus text.
     "answers/tests/test_unit_deposits.py",
     "answers/tests/test_component_deposit_answers.py",
+    # S1.2 loans fixtures: synthetic loan sheets (auto model-year tiers /
+    # mortgage labels / personal terms) whose table-level effective-date
+    # statement is part of the parse rules under test; all numbers, dates and
+    # URLs are synthetic (example.org) — no corpus text.
+    "answers/tests/test_unit_loans.py",
+    "answers/tests/test_component_loan_answers.py",
 }
 # path patterns that must never appear in git at all (outside harness/):
 FORBIDDEN_PATH_RE = re.compile(
