@@ -170,5 +170,11 @@ jobs:
 
       - name: pip-audit — vulnerable dependencies (grading path must stay clean)
         run: |
+          # pip-audit scans the WHOLE job environment, including the runner's
+          # preinstalled pip/setuptools. Their bundled setuptools can pin a
+          # version with open CVEs (observed: 79.0.1 -> PYSEC-2026-3447 /
+          # GHSA-xmj3-9gf7-h52w). Upgrade the tooling first so the audit judges
+          # our project closure, not GitHub's base-image vintage.
+          python -m pip install --quiet --upgrade pip setuptools
           python -m pip install --quiet pip-audit==2.7.3
           pip-audit --skip-editable --desc off
