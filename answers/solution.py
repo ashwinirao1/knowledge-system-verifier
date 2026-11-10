@@ -39,6 +39,7 @@ if _answers not in sys.path:
 
 import hashlib  # noqa: E402
 import json  # noqa: E402
+import re  # noqa: E402
 
 import branches as branches_mod  # noqa: E402
 import cards as cards_mod  # noqa: E402
@@ -47,6 +48,7 @@ import classify as classify_mod  # noqa: E402
 import cleaning as cleaning_mod  # noqa: E402
 import conflicts as conflicts_mod  # noqa: E402
 import deposits as deposits_mod  # noqa: E402
+import facts as facts_mod  # noqa: E402
 import ledger as ledger_mod  # noqa: E402
 import loans as loans_mod  # noqa: E402
 import question as question_mod  # noqa: E402
@@ -60,6 +62,7 @@ DEPOSIT_PRODUCT = "deposit"
 LOAN_PRODUCT = "loans"
 CARDS_PRODUCT = "cards"
 BRANCH_PRODUCT = "branch"
+FACTS_PRODUCT = "facts"
 
 
 def _content_hash(product: str, metric: str, tier_dims: dict, value_text: str, eff: str | None) -> str:
@@ -107,6 +110,8 @@ class CurrentTruth:
             self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
         for claim in branches_mod.extract_branches(text):
             self._store_branch_claim(claim, page, page_type, rank, snap_id, snap_date)
+        for claim in facts_mod.extract_facts(text):
+            self._store_facts_claim(claim, page, page_type, rank, snap_id, snap_date)
 
     def _store_claim(self, claim: dict, page, page_type: str, rank: float,
                      snap_id: str, snap_date: str) -> None:
@@ -196,6 +201,27 @@ class CurrentTruth:
             quote=claim.get("quote"), content_hash=content_hash,
         )
 
+    def _store_facts_claim(self, claim: dict, page, page_type: str, rank: float,
+                           snap_id: str, snap_date: str) -> None:
+        dims = dict(claim["tier_dims"])
+        value = claim["value"]
+        value_text = claim.get("value_text", "")
+        content_hash = _content_hash(FACTS_PRODUCT, "text", dims, value_text, None)
+        self.ledger.add_claim(
+            product=FACTS_PRODUCT, metric="text", tier_dims=dims, value=value,
+            value_text=value_text, min_earn=None,
+            effective_date=None, page_url=page.url, page_type=page_type,
+            page_rank=rank, snapshot_id=snap_id, snapshot_date=snap_date,
+            quote=claim.get("quote"), content_hash=content_hash,
+        )
+
+    def _facts_source(self, c) -> tuple[str, str]:
+        """Cite the published link target for site_link claims (the URL itself
+        is the fact); everything else cites its page."""
+        if c.tier_dims.get("kind") == "site_link":
+            return (c.tier_dims.get("url") or c.page_url, c.quote or "")
+        return (c.page_url, c.quote or "")
+
     def answer(self, question: str, as_of: Optional[str] = None) -> Answer:
         slots = question_mod.parse_question(question)
         if not slots:
@@ -214,6 +240,8 @@ class CurrentTruth:
             return self._answer_cards(slots, snap_id, as_of_iso)
         if slots["family"] == "branch":
             return self._answer_branch(slots, snap_id, as_of_iso)
+        if slots["family"] == "facts":
+            return self._answer_facts(slots, snap_id, as_of_iso)
         claims = self.ledger.all_claims_snapshot(snap_id, PRODUCT, slots["metric"])
         # tier filter: exact dims we know, leave unspecified dims open
         kept = []
@@ -559,6 +587,134 @@ class CurrentTruth:
             conflict_note=None,
         )
 
+    # ----------------------------------------------------------------- facts
+    def _answer_facts(self, slots: dict, snap_id: str, as_of_iso: str | None) -> Answer:
+        """Facts-family answer (S1.5): programs, services, wallets, annual
+        series and site links.
+
+        Prose/link claims stay OUT of the conflicts views like branch text:
+        programs and services legitimately differ page to page, which is not
+        a contradiction (R5). Rates-directory links reuse the family rhythm:
+        the directory URL is the page hosting the asked family's rank-winner
+        rate rows (no URL special-casing).
+        """
+        claims = self.ledger.all_claims_snapshot(snap_id, FACTS_PRODUCT, "text")
+        winners = list(trust_mod.pick_winners(claims).values())
+        mode = slots["mode"]
+        chosen: list = []
+
+        if mode == "link" and slots.get("link_family"):
+            # rates-directory: page hosting the family's published rate rows.
+            # Mirror the certificate answer's filters exactly: a non-IRA
+            # question is answered by non-IRA rows, which live on the savings
+            # hub; business-member wording follows business rows.
+            fam = slots["link_family"]
+            product = PRODUCT if fam == "certificate" else DEPOSIT_PRODUCT
+            rows = []
+            for met in ("apy", "dividend_rate"):
+                rows.extend(self.ledger.all_claims_snapshot(snap_id, product, met))
+            kept = []
+            for c in rows:
+                d = c.tier_dims
+                if fam == "certificate" and d.get("ira_type"):
+                    continue
+                kept.append(c)
+            if not kept:
+                text, _ = synth.refusal()
+                return Answer(text=text, sources=[], confident=False, conflict_note=None)
+            by_page: dict[str, list] = {}
+            for c in kept:
+                by_page.setdefault(c.page_url, []).append(c)
+            url = sorted(
+                by_page,
+                key=lambda u: (-max(c.page_rank for c in by_page[u]), -len(by_page[u]), u),
+            )[0]
+            src = by_page[url][0]
+            chosen = [src]
+            if fam == "certificate":
+                text = synth.cert_directory(url)
+            else:
+                text = synth.deposit_directory(url)
+            return Answer(
+                text=text,
+                sources=[Source(url=src.page_url, snapshot_id=snap_id, quote=src.quote)],
+                confident=True,
+                conflict_note=None,
+            )
+
+        if mode == "link":
+            role = slots["link_role"]
+            kept = [
+                c for c in winners
+                if c.tier_dims.get("kind") == "site_link"
+                and c.tier_dims.get("role") == role
+            ]
+            kept = sorted(kept, key=lambda c: (c.tier_dims.get("url", ""), c.page_url))
+            chosen = kept
+            text = synth.facts_link(role, kept)
+        elif mode == "wallet":
+            kept = [c for c in winners if c.tier_dims.get("kind") == "wallet"]
+            chosen = sorted(kept, key=lambda c: (c.tier_dims.get("wallets_display", ""), c.page_url))
+            text = synth.wallet_support(chosen)
+        elif mode == "update_contact":
+            kept = [
+                c for c in winners
+                if c.tier_dims.get("kind") == "service"
+                and c.tier_dims.get("service") == "review_change_personal_info"
+            ]
+            chosen = sorted(kept, key=lambda c: (-c.page_rank, c.page_url))
+            text = synth.update_contact(chosen)
+        elif mode == "program":
+            kept = [c for c in winners if c.tier_dims.get("kind") == "program"]
+            asked = slots.get("program")
+            if asked:
+                # the question names a program: only that program's claim may
+                # be used (Home$tart must never leak into "Bright Start").
+                # token-set match, '$' neutralised ("home$tart" == "Home $tart")
+                asked_toks = set(re.findall(r"[a-z0-9]+", asked.lower().replace("$", " ")))
+                bound = [
+                    c for c in kept
+                    if asked_toks <= set(re.findall(r"[a-z0-9]+", (c.tier_dims.get("program") or "").replace("$", " ")))
+                ]
+                kept = bound
+            else:
+                # no name in the question: only safe when ONE program is on file
+                if len({c.tier_dims.get("program") for c in kept}) > 1:
+                    kept = []
+            chosen = sorted(kept, key=lambda c: (-c.value, c.tier_dims.get("program", "")))
+            text = synth.program_fact(chosen)
+        elif mode == "series":
+            kept = [
+                c for c in winners
+                if c.tier_dims.get("kind") == "annual_series"
+                and c.tier_dims.get("series") == slots["series"]
+            ]
+            chosen = kept
+            text = synth.annual_series(chosen, slots["series"], year=slots.get("year"))
+        else:
+            text = synth.REFUSAL
+
+        if not chosen or text == synth.REFUSAL or not text:
+            text, _ = synth.refusal()
+            return Answer(text=text, sources=[], confident=False, conflict_note=None)
+
+        def _src_key(c):
+            # link claims: prefer the replica whose own page IS the link target
+            owner = c.tier_dims.get("kind") == "site_link" and (
+                (c.tier_dims.get("url") or "").lower().rstrip("/")
+                == (c.page_url or "").lower().rstrip("/")
+            )
+            return (-c.page_rank, 0 if owner else 1, c.page_url)
+
+        src = sorted(chosen, key=_src_key)[0]
+        src_url, src_quote = self._facts_source(src)
+        return Answer(
+            text=text,
+            sources=[Source(url=src_url, snapshot_id=snap_id, quote=src_quote)],
+            confident=True,
+            conflict_note=None,
+        )
+
     def _present(self, snap_id: str, as_of_iso: str | None) -> bool:
         return as_of_iso is None or snap_id == trust_mod.snapshot_id_as_of(self.ledger.snapshot_dates(), None)
 
@@ -570,6 +726,16 @@ class CurrentTruth:
 def trust_key(c) -> tuple:
     d = c.tier_dims
     kind = d.get("kind")
+    if kind == "site_link":
+        return ("site_link", d.get("role"), d.get("url"))
+    if kind == "program":
+        return ("program", d.get("program"), d.get("purpose"))
+    if kind == "wallet":
+        return ("wallet", d.get("wallets"))
+    if kind == "service":
+        return ("service", d.get("service"), d.get("login"), d.get("phone"))
+    if kind == "annual_series":
+        return ("annual_series", d.get("series"), d.get("year"))
     if kind == "branch_hours":
         return ("branch_hours", d.get("channel"), d.get("branch"), d.get("schedule"))
     if kind == "branch_address":

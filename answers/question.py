@@ -143,6 +143,59 @@ def _parse_branch(q: str) -> dict | None:
     return None
 
 
+# ------------------------------------------------------------------ facts (S1.5)
+_SERIES_ALIASES = {
+    "used volunteer time off|volunteer time off|VTO": "employees_vto",
+    "volunteer hours": "volunteer_hours",
+    "nonprofit boards": "board_seats",
+}
+_FACTS_UPDATE_RE = re.compile(
+    r"\bcontact information\b|\bcontact info\b|\bchange (?:my|the|your) "
+    r"(?:address|phone|email)|\bupdate (?:my|the|your) (?:address|phone|email)|"
+    r"\bpersonal information\b",
+    re.I,
+)
+_FACTS_WALLET_RE = re.compile(r"\bmobile wallets?\b|\bwallets?\b", re.I)
+_FACTS_PAY_RE = re.compile(r"\b(?:apple|google|samsung) pay\b", re.I)
+_FACTS_PROGRAM_RE = re.compile(r"\bprogram\b", re.I)
+_FACTS_PROGRAM_NAME_RE = re.compile(
+    r"(?:dupaco'?s?|the)\s+([\w$'-]{2,28}(?:\s+[\w$'-]{2,28}){0,2})\s+program\b", re.I
+)
+_FACTS_LINK_RE = re.compile(r"\blinks?\b|\burls?\b", re.I)
+_FACTS_LOCATOR_RE = re.compile(r"\blocat(?:or|ing)\b|\bfind a branch\b|\bbranch (?:and|or) ATM\b", re.I)
+_FACTS_JOIN_RE = re.compile(r"\b(?:how do i (?:join|become a member)|join dupaco(?: online)?|become a member)\b", re.I)
+_FACTS_YEAR_RE = re.compile(r"\bin (20\d\d)\b", re.I)
+
+
+def _parse_facts(q: str) -> dict | None:
+    """Facts family (S1.5): wallet support, annual series, services, programs,
+    links. Runs BEFORE the product families so wording like "cards to a mobile
+    wallet" or "CD rates link" never lands in the APR paths."""
+    if _FACTS_WALLET_RE.search(q) and (_FACTS_PAY_RE.search(q) or "card" in q):
+        return {"family": "facts", "mode": "wallet"}
+    if re.search(r"how many\b", q) and re.search(r"volunteer|VTO", q, re.I):
+        series = "employees_vto" if re.search(r"volunteer time off|\bvto\b", q, re.I) else "volunteer_hours"
+        m = _FACTS_YEAR_RE.search(q)
+        return {"family": "facts", "mode": "series", "series": series,
+                "year": int(m.group(1)) if m else None}
+    if _FACTS_UPDATE_RE.search(q):
+        return {"family": "facts", "mode": "update_contact"}
+    if _FACTS_PROGRAM_RE.search(q):
+        m = _FACTS_PROGRAM_NAME_RE.search(q)
+        return {"family": "facts", "mode": "program",
+                "program": (m.group(1).lower() if m else None)}
+    if _FACTS_LINK_RE.search(q):
+        if _FACTS_LOCATOR_RE.search(q):
+            return {"family": "facts", "mode": "link", "link_role": "branch_atm_locator"}
+        if re.search(r"\brate", q) and _CERT_RE.search(q):
+            return {"family": "facts", "mode": "link", "link_family": "certificate"}
+        if re.search(r"\brate", q) and _GENERIC_SAVINGS_RE.search(q):
+            return {"family": "facts", "mode": "link", "link_family": "deposit"}
+    if _FACTS_JOIN_RE.search(q):
+        return {"family": "facts", "mode": "link", "link_role": "join_application"}
+    return None
+
+
 def _parse_loan(q: str) -> dict | None:
     # ARM / non-conventional products are not on any rate sheet corpus-wide:
     # answering with the fixed-conventional tiers would be a wrong-fact answer.
@@ -193,6 +246,9 @@ def parse_question(question: str) -> dict | None:
     q = (question or "").lower().strip()
     if not q:
         return None
+    slots = _parse_facts(q)
+    if slots:
+        return slots
     if _CERT_RE.search(q):
         return _parse_certificate(q)
     slots = _parse_deposit(q)

@@ -51,6 +51,12 @@ ALLOWED_CONTENT_FILES = {
     # of the parse rules under test; all synthetic (example.org) — no corpus text.
     "answers/tests/test_unit_cards.py",
     "answers/tests/test_component_card_answers.py",
+    # S1.5 facts fixtures: the published hostname IS the rule under test —
+    # join/locator/site-link claims gate on the literal `join.dupaco.com`
+    # host and `dupaco.com/contact` locator target, so priors must quote the
+    # host pattern. Fixtures are synthetic sentences; no corpus page text.
+    "answers/tests/test_unit_facts.py",
+    "answers/tests/test_component_facts_answers.py",
 }
 # path patterns that must never appear in git at all (outside harness/):
 FORBIDDEN_PATH_RE = re.compile(

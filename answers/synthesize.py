@@ -281,6 +281,135 @@ def refusal() -> tuple[str, None]:
     return REFUSAL, None
 
 
+# --------------------------------------------------------------------- facts
+_FHLB_SPONSOR = "with FHLB (Federal Home Loan Bank of Des Moines)"
+
+_SERIES_PHRASES = {
+    "employees_vto": "employees used Volunteer Time Off",
+    "volunteer_hours": "volunteer hours",
+    "board_seats": "nonprofit boards and committees served on",
+    "employees_volunteered": "employees volunteered",
+}
+
+
+def facts_link(role: str, claims: list[Claim]) -> str:
+    """CTA-link answers: only the normalised URL the corpus publishes wins."""
+    urls = sorted({c.tier_dims.get("url", "") for c in claims} - {""})
+    if not urls:
+        return REFUSAL
+    url = urls[0]
+    if role == "join_application":
+        return f"To become a member online, use {url}."
+    return f"Dupaco's branch and ATM locator is at {url}."
+
+
+def cert_directory(url: str) -> str:
+    """Rates directory: where the published certificate rate rows live now."""
+    return f"The published certificate rates are on the rate tables at {url}."
+
+
+def deposit_directory(url: str) -> str:
+    """Rates directory: where the published savings rate rows live now."""
+    return f"The published savings rates are on the rate tables at {url}."
+
+
+def program_fact(claims: list[Claim]) -> str:
+    """Assistance-program description built only from the winner's own dims."""
+    if not claims:
+        return REFUSAL
+    c = sorted(claims, key=lambda x: (-x.value, x.tier_dims.get("program", "")))[0]
+    d = c.tier_dims
+    sponsor = f", {_FHLB_SPONSOR}," if d.get("sponsor") == "fhlb" else ""
+    word = "grant funds" if d.get("kind") == "grant" else "assistance"
+    return (
+        f"The {d.get('program_display', d.get('program', 'program'))}{sponsor} "
+        f"provides up to {fmt_money(c.value)} in {word}"
+        + (
+            f", applied as a credit toward {d['purpose']}"
+            if d.get("purpose") else ""
+        )
+        + (f" for {d['audience']}." if d.get("audience") else ".")
+    )
+
+
+def update_contact(claims: list[Claim]) -> str:
+    """Channels exactly as the winner's service claim stores them."""
+    if not claims:
+        return REFUSAL
+    c = sorted(claims, key=lambda x: (-x.page_rank, x.page_url))[0]
+    d = c.tier_dims
+    lead = None
+    if d.get("login"):
+        lead = "by logging into your account and making the desired changes"
+    alts: list[str] = []
+    if d.get("phone"):
+        alts.append(f"call us at {d['phone']}")
+    if d.get("email"):
+        alts.append(f"email {d['email']}")
+    if d.get("branch"):
+        alts.append("visit a branch in person")
+    if not lead:
+        return "You can review and change your personal information: " + ", ".join(alts) + "."
+    return (
+        "You can review and change your personal information "
+        + lead
+        + ("; you may also " + ", ".join(alts) if alts else "")
+        + "."
+    )
+
+
+def wallet_support(claims: list[Claim]) -> str:
+    """"Yes — ... Apple Pay, Google Pay or Samsung Pay..." from winner dims."""
+    if not claims:
+        return REFUSAL
+    c = sorted(claims, key=lambda x: (-x.page_rank, x.page_url))[0]
+    d = c.tier_dims
+    text = (
+        f"Yes — you can add your Dupaco {d.get('cards', 'cards')} to "
+        f"{d.get('wallets_display', '')}"
+    )
+    if d.get("default_ok"):
+        text += " and set one as your default for faster checkouts"
+    return text + "."
+
+
+def _series_part(series: str, year: int, n: int, approx: bool) -> str:
+    phrase = _SERIES_PHRASES.get(series, series.replace("_", " "))
+    mod = "Nearly " if approx else ""
+    return f"{mod}{n} {phrase} in {year}"
+
+
+def annual_series(claims: list[Claim], series: str, year: int | None = None) -> str:
+    """"last year"/unbound-year questions answer the full chronological series
+    (the freshest published annual recap may be older than today); a year-bound
+    question answers only that year's statement."""
+    best: dict[int, Claim] = {}
+    for c in claims:
+        d = c.tier_dims
+        if d.get("series") != series:
+            continue
+        y = int(d.get("year", 0))
+        if y not in best or c.page_rank > best[y].page_rank:
+            best[y] = c
+    if not best:
+        return REFUSAL
+    if year is not None:
+        c = best.get(year)
+        if c is None:
+            return REFUSAL
+        return _series_part(series, year, int(c.value), bool(c.tier_dims.get("approx")))
+    parts = [
+        _series_part(series, y, int(best[y].value), bool(best[y].tier_dims.get("approx")))
+        for y in sorted(best)
+    ]
+    return (
+        "Per the annual recaps on file: "
+        + parts[0]
+        + ("; " + "; ".join(parts[1:]) if len(parts) > 1 else "")
+        + " (the years shown are the most recent reporting published by the site)."
+    )
+
+
 # -------------------------------------------------------------------- branch
 def _sched_norm(text: str) -> str:
     """Deterministic schedule address text (dashes unified)."""

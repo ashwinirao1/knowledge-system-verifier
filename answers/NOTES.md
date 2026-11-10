@@ -21,6 +21,18 @@ Only same-canonical-key contradictions (same product+metric+tier with different 
 deduplicated across replica pages, with the winning value and the reason it won. Tier
 differences and boilerplate drift are not conflicts.
 
+## Fact families beyond rate tables (S1.4/S1.5)
+
+Prose knowledge is extracted as text claims from the same pages (never hardcoded to a
+question): branch hours/addresses/relocations, member-service how-tos, assistance
+programs (with dollar value), mobile-wallet support, annual newsroom recaps (year = a
+tier dim), and the site's own published CTA links (application site, branch/ATM locator),
+plus rates-directory links derived from where the winning rate rows actually live. These
+families are excluded from conflicts — pages legitimately differ, which is not a
+contradiction. When a question does not bind the fact (an unbound year, an unnamed
+program), the answer either replays the full chronological series from the ledger or
+declines — it never guesses between published values.
+
 ## Dependencies & API keys
 
 - `requirements.txt` is intentionally empty: the grading path is pure Python stdlib.
