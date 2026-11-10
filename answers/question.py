@@ -1,8 +1,11 @@
-"""Question parser (S0.3 v0): rule grammar → product/metric/tier slots.
+"""Question parser (S0.3 v0 + S1.1): rule grammar → product/metric/tier slots.
 
-Scope note (tracer slice): this version only claims the certificate family.
-Questions it cannot fully slot (no family, no term) return `None` → the answer
-path declines honestly instead of guessing (R1).
+Families:  certificate  → 17-month special / jumbo / IRA term certs
+           deposit      → Share Savings, savings variants, money markets,
+                          checking (personal + business), with balance tiers
+
+Questions neither family can slot return `None` → the answer path declines
+honestly instead of guessing (R1).
 """
 from __future__ import annotations
 
@@ -25,15 +28,46 @@ _REGULAR_RE = re.compile(r"\bregulars?\b|\bstandard\b", re.I)
 _JUMBO_RE = re.compile(r"\bjumbos?\b", re.I)
 _IRA_RE = re.compile(r"\b(iras?|roth|traditional)\b", re.I)
 _DIV_RE = re.compile(r"dividend\s+rate", re.I)
-_MONTHS_IN_QUESTION_RE = re.compile(r"as of|in\s+(January|February|March|April|May|June|July|August|September|October|November|December)", re.I)
+
+# ---------------------------------------------------------------- deposits
+# named products first, generic fallbacks last; first hit per canonical wins
+_DEPOSIT_PRODUCT_RES = [
+    (re.compile(r"\bshare\s+savings\b", re.I), "share_savings"),
+    (re.compile(r"\bbright\s+savings\b", re.I), "bright_savings"),
+    (re.compile(r"\bhigh[- ]yield\b", re.I), "high_yield_savings"),
+    (re.compile(r"\bmoney\s+market", re.I), "investors_choice_mm"),
+    (re.compile(r"\byou[- ]?name[- ]?it\b", re.I), "you_name_it_savings"),
+    (re.compile(r"\bholiday\s+club\b", re.I), "holiday_club"),
+    (re.compile(r"\blaunchpad\b", re.I), "launchpad_savings"),
+    (re.compile(r"\bchecking\b", re.I), "checking_family"),
+]
+_GENERIC_SAVINGS_RE = re.compile(r"\bsavings?\b", re.I)
+_CHECKING_FAMILY = ["free_checking", "first_rate_checking"]
+
+_DO_ANY_RE = re.compile(r"\bdo any\b|\bdoes any\b|\bis there (?:a|any)\b", re.I)
+_HIGHEST_RE = re.compile(r"\b(highest|best|max(?:imum)?|tops?\s+out)\b", re.I)
+_PCT_HYPO_RE = re.compile(r"(\d{1,2}(?:\.\d+)?)\s*%", re.I)
+_TIER_RANGE_RE = re.compile(
+    r"balance[s]?\s+(?:between|of|from|over|above)\s+\$?"
+    r"([\d,]+(?:\.\d+)?)\s*(?:(?:and|to|-|–)\s*\$?([\d,]+(?:\.\d+)?))?",
+    re.I,
+)
+_TIER_RANGE_ALT_RE = re.compile(r"\$([\d,]+(?:\.\d+)?)\s*(?:-|–|to)\s*\$([\d,]+(?:\.\d+)?)", re.I)
 
 
 def parse_question(question: str) -> dict | None:
-    """Return cert-family slots, or None when the family cannot be identified."""
-    q = (question or "").lower()
-    if not _CERT_RE.search(q):
+    """Return the family's slots, or None when no family can be identified."""
+    q = (question or "").lower().strip()
+    if not q:
         return None
+    if _CERT_RE.search(q):
+        return _parse_certificate(q)
+    return _parse_deposit(q)
+
+
+def _parse_certificate(q: str) -> dict | None:
     slots = {
+        "family": "certificate",
         "product": "certificate",
         "term_months": None,
         "special": None,
@@ -64,3 +98,49 @@ def parse_question(question: str) -> dict | None:
     if _DIV_RE.search(q):
         slots["metric"] = "dividend_rate"
     return slots
+
+
+def _parse_deposit(q: str) -> dict | None:
+    prods: list[str] = []
+    for rx, canon in _DEPOSIT_PRODUCT_RES:
+        if rx.search(q):
+            prods.append(canon)
+    if not prods and (_GENERIC_SAVINGS_RE.search(q) or re.search(r"\baccount rates?\b", q)):
+        # generic "savings" → the primary savings account (Share Savings)
+        prods = ["share_savings"]
+    if not prods:
+        return None
+    prods = [c for p in prods for c in (_CHECKING_FAMILY if p == "checking_family" else [p])]
+
+    metric = "dividend_rate" if _DIV_RE.search(q) else "apy"
+
+    tier = None
+    m = _TIER_RANGE_RE.search(q) or _TIER_RANGE_ALT_RE.search(q)
+    if m:
+        lo = float(m.group(1).replace(",", ""))
+        hi = float(m.group(2).replace(",", "")) if m.group(2) else lo
+        tier = (lo, hi)
+
+    hypo = None
+    mp = _PCT_HYPO_RE.search(q)
+    if mp:
+        hypo = float(mp.group(1))
+
+    mode = "list_all"
+    if _DO_ANY_RE.search(q) and hypo is not None:
+        mode = "do_any"
+    elif _HIGHEST_RE.search(q):
+        mode = "highest"
+    elif tier is not None:
+        mode = "tier"
+
+    return {
+        "family": "deposit",
+        "product": "deposit",
+        "products": prods,
+        "metric": metric,
+        "mode": mode,
+        "tier": tier,
+        "hypo": hypo,
+        "member": "business" if re.search(r"\bbusiness\b", q) else "personal",
+    }

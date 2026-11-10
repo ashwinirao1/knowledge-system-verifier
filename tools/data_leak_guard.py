@@ -34,6 +34,12 @@ ALLOWED_CONTENT_FILES = {
     # RULE UNDER TEST (freshest-date wins); all dates/URLs are fake
     # (example.org, 2026 synthetic dates) — no corpus text.
     "answers/tests/test_component_conflicts.py",
+    # answers/tests/test_unit_deposits.py and test_component_deposit_answers.py:
+    # synthetic tier tables (Share Savings / checking fixtures) whose
+    # table-level effective-date statement is part of the parse rules under
+    # test; all dates/URLs fake (example.org) — no corpus text.
+    "answers/tests/test_unit_deposits.py",
+    "answers/tests/test_component_deposit_answers.py",
 }
 # path patterns that must never appear in git at all (outside harness/):
 FORBIDDEN_PATH_RE = re.compile(

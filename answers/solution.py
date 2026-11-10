@@ -44,6 +44,7 @@ import certificates as certificates_mod  # noqa: E402
 import classify as classify_mod  # noqa: E402
 import cleaning as cleaning_mod  # noqa: E402
 import conflicts as conflicts_mod  # noqa: E402
+import deposits as deposits_mod  # noqa: E402
 import ledger as ledger_mod  # noqa: E402
 import question as question_mod  # noqa: E402
 import synthesize as synth  # noqa: E402
@@ -52,6 +53,7 @@ import trust as trust_mod  # noqa: E402
 from contract import Answer, Snapshot, Source  # noqa: E402
 
 PRODUCT = "certificate"
+DEPOSIT_PRODUCT = "deposit"
 
 
 def _content_hash(product: str, metric: str, tier_dims: dict, value_text: str, eff: str | None) -> str:
@@ -89,6 +91,8 @@ class CurrentTruth:
         for tab in tables_mod.parse_tables(text):
             for claim in certificates_mod.extract_certificates(tab):
                 self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
+            for claim in deposits_mod.extract_deposits(tab):
+                self._store_deposit_claim(claim, page, page_type, rank, snap_id, snap_date)
         for claim in certificates_mod.extract_prose_certificates(text):
             self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
 
@@ -112,6 +116,26 @@ class CurrentTruth:
             quote=claim.get("quote"), content_hash=content_hash,
         )
 
+    def _store_deposit_claim(self, claim: dict, page, page_type: str, rank: float,
+                             snap_id: str, snap_date: str) -> None:
+        dims = {**claim["tier_dims"]}
+        # membership segment is part of the canonical key here too: business
+        # Share Savings rows are distinct facts from personal ones (R5).
+        member = "business" if classify_mod.is_business(page.url, page.title) else "personal"
+        dims = {**dims, "member": member}
+        value = claim["value"]
+        metric = claim["metric"]
+        value_text = f"{value:.2f}%"
+        eff = claim.get("effective_date")
+        content_hash = _content_hash(DEPOSIT_PRODUCT, metric, dims, value_text, eff)
+        self.ledger.add_claim(
+            product=DEPOSIT_PRODUCT, metric=metric, tier_dims=dims, value=value,
+            value_text=value_text, min_earn=claim.get("min_earn"),
+            effective_date=eff, page_url=page.url, page_type=page_type,
+            page_rank=rank, snapshot_id=snap_id, snapshot_date=snap_date,
+            quote=claim.get("quote"), content_hash=content_hash,
+        )
+
     def answer(self, question: str, as_of: Optional[str] = None) -> Answer:
         slots = question_mod.parse_question(question)
         if not slots:
@@ -122,6 +146,8 @@ class CurrentTruth:
         if snap_id is None:
             text, _ = synth.refusal()
             return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        if slots["family"] == "deposit":
+            return self._answer_deposit(slots, snap_id, as_of_iso)
         claims = self.ledger.all_claims_snapshot(snap_id, PRODUCT, slots["metric"])
         # tier filter: exact dims we know, leave unspecified dims open
         kept = []
@@ -166,14 +192,84 @@ class CurrentTruth:
             conflict_note=note,
         )
 
+    def _answer_deposit(self, slots: dict, snap_id: str, as_of_iso: str | None) -> Answer:
+        """Deposit-family answer: product(s) → tier/mode → trust → template."""
+        ledger = self.ledger
+        claims = ledger.all_claims_snapshot(snap_id, DEPOSIT_PRODUCT, slots["metric"])
+        prods = set(slots["products"])
+        kept = []
+        for c in claims:
+            d = c.tier_dims
+            if d.get("product") not in prods:
+                continue
+            if d.get("member", "personal") != slots.get("member", "personal"):
+                continue
+            kept.append(c)
+        if not kept:
+            text, _ = synth.refusal()
+            return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        winners = trust_mod.pick_winners(kept)
+        chosen = list(winners.values())
+        mode = slots["mode"]
+
+        if mode == "tier":
+            lo, hi = slots["tier"]
+            mid = (lo + (hi if hi is not None else lo)) / 2.0
+            chosen = [
+                c for c in chosen
+                if c.tier_dims.get("tier_low") is not None
+                and c.tier_dims["tier_low"] <= mid
+                and (c.tier_dims.get("tier_high") is None or mid <= c.tier_dims["tier_high"])
+            ]
+            if not chosen:
+                text, _ = synth.refusal()
+                return Answer(text=text, sources=[], confident=False, conflict_note=None)
+            text = synth.deposit_answer(chosen, slots["metric"], present_tense=self._present(snap_id, as_of_iso))
+        elif mode == "highest":
+            chosen = sorted(chosen, key=lambda c: (-c.value, c.tier_dims.get("tier_low") or 0.0))[:1]
+            text = synth.deposit_highest(chosen[0], slots["metric"], present_tense=self._present(snap_id, as_of_iso))
+        elif mode == "do_any":
+            target = slots["hypo"]
+            hits = [c for c in chosen if abs(c.value - target) < 1e-9]
+            if hits:
+                text = synth.deposit_do_any_yes(hits, slots["metric"], present_tense=self._present(snap_id, as_of_iso))
+                chosen = hits
+            else:
+                top = sorted(chosen, key=lambda c: (-c.value, c.tier_dims.get("tier_low") or 0.0))[0]
+                text = synth.deposit_do_any_no(top, slots["metric"], present_tense=self._present(snap_id, as_of_iso))
+                chosen = [top]
+        else:  # list_all — every tier of every matched product (R1: all are claims)
+            text = synth.deposit_answer(chosen, slots["metric"], present_tense=self._present(snap_id, as_of_iso))
+
+        src = sorted(chosen, key=lambda c: (-c.page_rank, c.page_url))[0]
+        # conflict_note only when sources genuinely disagreed IN THIS VIEW (R5)
+        note = None
+        groups: dict[tuple, set] = {}
+        for c in kept:
+            groups.setdefault(trust_key(c), set()).add(c.value_text)
+        if any(len(v) > 1 for v in groups.values()):
+            note = synth.DISAGREEMENT_NOTE
+        return Answer(
+            text=text,
+            sources=[Source(url=src.page_url, snapshot_id=snap_id, quote=src.quote)],
+            confident=True,
+            conflict_note=note,
+        )
+
+    def _present(self, snap_id: str, as_of_iso: str | None) -> bool:
+        return as_of_iso is None or snap_id == trust_mod.snapshot_id_as_of(self.ledger.snapshot_dates(), None)
+
     def conflicts(self) -> list:
         """Every contradiction the site shows now: same key, different values."""
         return conflicts_mod.generate(self)
 
 
 def trust_key(c) -> tuple:
-    return (c.tier_dims["term_months"], c.tier_dims.get("jumbo"), c.tier_dims.get("special"),
-            c.tier_dims.get("ira_type"), c.tier_dims.get("member"))
+    d = c.tier_dims
+    if "product" in d:  # deposit family
+        return (d["product"], d.get("tier_low"), d.get("tier_high"), d.get("member"))
+    return (d["term_months"], d.get("jumbo"), d.get("special"),
+            d.get("ira_type"), d.get("member"))
 
 
 def build():

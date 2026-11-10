@@ -203,11 +203,24 @@ quality, security, data boundary — before any ledger row means anything.**
 
 ### T1 — Fact-base v1 (widen the slice)
 
-**S1.1 Deposit products with tiers** (certificates, Share Savings, Money Market, checking,
-business variants)
-- [ ] Balance-tier parsers (e.g. $0,000–$24,999 → dims), dividend/normaliser (rate vs APY)
-- [ ] Entity split: personal vs business product variants (**Business** 1st Rate vs personal 1st Rate)
-- Done when: dup-045 (0.15%), dup-046 (0.20% + $25,000), dup-049 (top out 0.20%), dup-052 (2.50%) pass traps.
+**S1.1 Deposit products with tiers — DONE (2026-11-10)**
+- [x] Balance-tier parsers: `$25,000+` / `$10,000 – $24,999.99` / `$250,000-$1,000,000` / `—`
+  → dims (tier_low, tier_high); product identity from ROW col0 (not section headings, which drift:
+  "Share Savings Account", "Saving Account Rates", "None") → canonical aliases incl. business
+  variants ("Business 1st Rate Checking") + apostrophe variants (`answers/deposits.py`)
+- [x] Rate-period qualifier from the column header: "for 1st 6 Months" → `rate_period="intro"`;
+  "After Promotional Period" → standard (None) so promo tables carrying BOTH intro and after-promo
+  columns fork into distinct keys instead of fake same-key contradictions — this killed 6 false
+  real-corpus conflicts on the Achieve Money Market promo rows **without special-casing any URL**
+- [x] Question grammar extended: products (named/generic fallback: "savings" → Share Savings),
+  metric (dividend rate vs APY/interest), modes tier / highest / do_any (never repeats the queried
+  value on "No!") / list_all (`answers/question.py`)
+- [x] Entity split personal vs business — reused page-level member dim in the canonical key
+- Done when: ✅ **dup-045 (0.15%) ✅ zero traps, dup-046 (0.20% + $25,000) ✅, dup-049 (top 0.20%,
+  never echoes the queried 0.35%) ✅, dup-052 (2.50%, all checking tiers) ✅**. Public eval
+  0.1508 → **0.2671** (tier_disambiguation 0.17→0.50, current_value 0→0.33, conflict_resolution
+  0→0.33, entity_attribution 0→0.25, no regressions). Ingest 2.6 s; +24 deposit claims; selftest
+  unchanged (0.83, conflicts F1 1.0).
 
 **S1.2 Loan families** (auto w/ model-year tiers & terms, personal, mortgage tiers incl. loan-amount
 tiers, home-improvement)
@@ -286,6 +299,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | answers stub (S0.1) | 2026-11-09 | 0.2 | 1.0 | 1.0 | 0.0 | **0.17** | `harness/selftest` synthetic only (not public); refusal path scores; this report = the eval-gate baseline |
 | S0.2+S0.3 tracer (certs) | 2026-11-10 | 0.402 (weighted) | 1.0 | 1.0 (p50 0.0s) | — | **0.1508** | public eval: dup-001 ✅ byte-exact, dup-006 ✅, dup-145 ✅ + 2 more refusals; ingest 1.9–3.4 s for 5 snapshots (3266 pages) |
 | S0.4 conflicts | 2026-11-10 | 0.8 (selftest qa) | 1.0 | 1.0 | **1.0** (F1 1.0, resolution 1.0) | **0.83 selftest** / **0.1508 public** | gold c1 matched w/ correct winner; 0 real-corpus conflicts is truthful (cert rates only in tables); 58 tests, coverage 88% |
+| S1.1 deposits | 2026-11-10 | 0.485 (weighted) | 1.0 | 1.0 | — | **0.2671 public** / 0.83 selftest | dup-045/046/049/052 ✅ zero traps; tier_disambiguation 0.17→0.50, current_value 0→0.33, conflict_resolution 0→0.33, entity_attribution 0→0.25; 6 false achieve-MM conflicts killed via rate_period qualifier dim (no URL special-casing); 82 tests |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

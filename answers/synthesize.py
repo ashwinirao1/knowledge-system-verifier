@@ -72,5 +72,73 @@ def cert_answer(claims: list[Claim], present_tense: bool = True) -> str:
     return parts[0][0].upper() + parts[0][1:] + ("." if len(parts) == 1 else "; " + "; ".join(parts[1:]) + ".")
 
 
+# ------------------------------------------------------------------ deposits
+def _money_fmt(v: float) -> str:
+    return f"${v:,.2f}" if v % 1 else f"${v:,.0f}"
+
+
+def tier_display(dims: dict) -> str:
+    lo, hi = dims.get("tier_low"), dims.get("tier_high")
+    if lo is None and hi is None:
+        return ""
+    if hi is None:
+        return f"{_money_fmt(lo)} and up"
+    return f"{_money_fmt(lo)} – {_money_fmt(hi)}"
+
+
+def _deposit_metric_word(metric: str) -> str:
+    return "dividend rate" if metric == "dividend_rate" else "APY"
+
+
+def deposit_answer(claims: list[Claim], metric: str, present_tense: bool = True) -> str:
+    """One part per tier, ascending; a single-claim product reads as a sentence."""
+    verb = "pays" if present_tense else "paid"
+    word = _deposit_metric_word(metric)
+    parts = []
+    for c in sorted(claims, key=lambda c: (c.tier_dims.get("tier_low") or 0.0)):
+        t = tier_display(c.tier_dims)
+        rate = f"a {fmt_rate(c)} {word}" if word == "dividend rate" else f"{fmt_rate(c)} {word}"
+        if t:
+            parts.append(f"{c.tier_dims['product_display']} {verb} {rate} for balances of {t}")
+        else:
+            parts.append(f"{c.tier_dims['product_display']} {verb} {rate}")
+    if not parts:
+        return REFUSAL
+    return parts[0][0].upper() + parts[0][1:] + ("." if len(parts) == 1 else "; " + "; ".join(parts[1:]) + ".")
+
+
+def deposit_highest(claim: Claim, metric: str, present_tense: bool = True) -> str:
+    word = _deposit_metric_word(metric)
+    t = tier_display(claim.tier_dims)
+    phrase = f" for balances of {t}" if t else ""
+    if present_tense:
+        return (f"The highest {claim.tier_dims['product_display']} {word} is "
+                f"{fmt_rate(claim)}{phrase}.")
+    return (f"The highest {claim.tier_dims['product_display']} {word} was "
+            f"{fmt_rate(claim)}{phrase}.")
+
+
+def deposit_do_any_yes(claims: list[Claim], metric: str, present_tense: bool = True) -> str:
+    """Hypothesis form that checks out: 'Yes — Product pays V% APY for ...'"""
+    verb = "pays" if present_tense else "paid"
+    parts = []
+    for c in sorted(claims, key=lambda c: (c.tier_dims.get("product"), c.tier_dims.get("tier_low") or 0.0)):
+        t = tier_display(c.tier_dims)
+        parts.append(f"{c.tier_dims['product_display']} {verb} {fmt_rate(c)} "
+                     f"{_deposit_metric_word(metric)}" + (f" for balances of {t}" if t else ""))
+    if not parts:
+        return REFUSAL
+    return "Yes — " + "; ".join(parts) + "."
+
+
+def deposit_do_any_no(top: Claim, metric: str, present_tense: bool = True) -> str:
+    """Negative hypothesis: never repeat the queried value; state the family top."""
+    word = _deposit_metric_word(metric)
+    t = tier_display(top.tier_dims)
+    phrase = f", for balances of {t}" if t else ""
+    return (f"No. The highest {top.tier_dims['product_display']} {word} is "
+            f"{fmt_rate(top)}{phrase}.")
+
+
 def refusal() -> tuple[str, None]:
     return REFUSAL, None

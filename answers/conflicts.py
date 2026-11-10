@@ -29,6 +29,12 @@ def _key_of(c) -> tuple:
 def _topic_text(claim) -> str:
     """Human topic from canonical dims — member phrasing ("6-Month certificate APY")."""
     d = claim.tier_dims
+    if "product" in d:  # deposit family
+        from synthesize import tier_display  # local sibling import (no cycle at import time)
+        word = "dividend rate" if claim.metric == "dividend_rate" else "APY"
+        tier = tier_display(d)
+        seg = f"{d['product_display']} {tier}".strip()
+        return f"{seg} {word}"
     pre = {"roth": "Roth ", "traditional": "Traditional "}.get(d.get("ira_type"), "")
     mid = ""
     if d.get("jumbo"):
@@ -53,16 +59,32 @@ def _reason(winner, loser) -> str:
 
 def generate(store) -> list[Conflict]:
     """One Conflict per canonical key that keeps >1 distinct value in the current view."""
-    from trust import pick_winners, snapshot_id_as_of  # local sibling cycle-avoidance
+    from trust import snapshot_id_as_of  # local sibling cycle-avoidance
 
     ledger = store.ledger
     snap_dates = ledger.snapshot_dates()
     if not snap_dates:
         return []
     latest = snapshot_id_as_of(snap_dates, None)
-    claims = ledger.all_claims_snapshot(latest, "certificate", "apy")
-
     conflicts: list[Conflict] = []
+    for family_product, family_metric in _FAMILY_VIEWS:
+        claims = ledger.all_claims_snapshot(latest, family_product, family_metric)
+        _scan_family(claims, conflicts)
+    conflicts.sort(key=lambda c: (c.topic, c.values[0]))
+    return conflicts
+
+
+# metric views scanned for same-key value disagreements in the current view
+_FAMILY_VIEWS = (
+    ("certificate", "apy"),
+    ("deposit", "apy"),
+    ("deposit", "dividend_rate"),
+)
+
+
+def _scan_family(claims: list, conflicts: list) -> None:
+    from trust import pick_winners  # local sibling cycle-avoidance
+
     # group rows by canonical key preserving deterministic iteration order
     groups: dict[tuple, list] = {}
     for c in claims:
