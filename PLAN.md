@@ -115,31 +115,33 @@ an increment moved us. The Eval Ledger (§7) is the scoreboard of record.*
   - [x] Create `answers/` with `solution.py` implementing `build()` → object with `ingest/answer/conflicts` matching `harness/contract.py` (no renames); contract imported exactly like the starter does
   - [x] `requirements.txt` (intentionally empty — stdlib only, R4), `NOTES.md` stub
   - [x] `.gitignore`: snapshot zips & unpacked snapshots, `results*/`, caches, `.DS_Store`; no data redistribution
-  - [ ] Push this repo to GitHub — only after `.gitignore` excludes the data dirs (see `AGENTS.md` §2: no data redistribution) *(blocked on remote creation)*
+  - [x] Push this repo to GitHub — only after `.gitignore` excludes the data dirs (see `AGENTS.md` §2: no data redistribution) — done 2026-11-10; CI verified green (see S0.6)
   - [x] Baseline run: `python harness/run_eval.py --submission starter --eval eval/public_eval.jsonl` → recorded in §7 (final 0.093)
 - Done when: `[x]` — `run_eval.py --submission answers` executes end-to-end on both the public corpus
   and the synthetic selftest; zero-snapshot grace verified by tests (7 OK, 100% coverage).
 
-**S0.2 Ingest: clean → classify → store**
+**S0.2 Ingest: clean → classify → store — DONE (2026-11-10)**
 - Intent: the ledger exists and is populated from all five snapshots.
 - Tasks
-  - [ ] Cleaning pass: strip nav/footer boilerplate, captcha blocks, image/recaptcha payloads
-  - [ ] Page classifier: product page / rates hub / newsroom / blog / promo / calculator / PDF (URL-based v0; authority ranks fixed)
-  - [ ] SQLite schema `claims(id, product, metric, tier_dims, value, unit, effective_date, page_url, page_type, snapshot_id, section_quote)`; canonical key = (product, metric, tier_dims)
-  - [ ] Table parser v0: markdown tables → candidate claims; **certificates family only** (tracer slice)
-  - [ ] Replica dedup by content hash (one claim per distinct fact, N replicas)
-  - [ ] Ingest driver: all 5 snapshots oldest-first; assert < 30 min with headroom
-- Done when: ledger contains ≥ all certificate claims from all 5 snapshots with provenance; ingest under time.
+  - [x] Cleaning pass: strip nav/footer boilerplate, captcha blocks, image/recaptcha payloads (`answers/cleaning.py`)
+  - [x] Page classifier: product page / rates hub / newsroom / blog / promo / calculator / PDF (URL-based v0; authority ranks fixed) (`answers/classify.py`)
+  - [x] SQLite schema claims(...) with canonical key = (product, metric, tier_dims) (`answers/ledger.py`); in-memory SQLite, `check_same_thread=False` (harness answers on the eval pool thread — serialized, deterministic)
+  - [x] Table parser v0: markdown tables → candidate claims; certificates family only (tracer slice) (`answers/tables.py`)
+  - [x] Replica dedup by content hash (one claim per distinct fact, N replicas) — hash includes member segment so personal vs business pages never absorb each other; replica merges upgrade provenance to the highest-authority page
+  - [x] Ingest driver: 5 snapshots oldest-first → **230 claims, 1.9–3.4 s total** (limit 1800 s)
+- Done when: ✅ ledger contains all certificate claims from all 5 snapshots with provenance
+  (verified: 10-month-fixed-jumbo history 3.90% → 3.90% → 4.00% present with effective dates 03/03/2026→06/02/2026→09/01/2026).
 
-**S0.3 Answer: minimal (certificates family)**
-- Intent: one real question family answered correctly end-to-end.
+**S0.3 Answer: minimal (certificates family) — DONE (2026-11-10)**
 - Tasks
-  - [ ] Question parser v0: product + metric + term/tier slots (rule grammar)
-  - [ ] `as_of` filter: last snapshot with `taken_on ≤ as_of`; default latest
-  - [ ] Trust stack v0: qualifier exact match → page-class authority → effective date → liveness
-  - [ ] Answer template: "The {term} {product} special pays {value} {unit} ($min)"; one Source; `confident=True`
-  - [ ] Refusal stub: no claim → `confident=False`, refusal phrase, **no digits in text**
-- Done when: e.g. 17-month cert answers 4.10% (dup-001); 10-month jumbo as_of 2026-05-31 answers 3.90% (dup-006); 7/1 ARM declines cleanly (dup-145).
+  - [x] Question parser v0: product + metric + term/tier slots (rule grammar, word numbers too) (`answers/question.py`)
+  - [x] `as_of` filter: last snapshot with `taken_on ≤ as_of`; month names clamp to month end (`answers/trust.py`)
+  - [x] Trust stack v0: tier exact match → page-class authority → freshest effective date (`answers/trust.py::pick_winners`)
+  - [x] Answer template from canonical dims; "The {term}-Month Fixed ... pays {apy} APY (${min} minimum)"; one Source + quote; `confident=True` (`answers/synthesize.py`)
+  - [x] Refusal: no claim → `confident=False`, refusal phrase, **digit-free text**
+- Done when: ✅ **dup-001 scores 1.0 with byte-exact template text**; **dup-006 scores 1.0**
+  (as_of clamps to the 2026-05-19 snapshot: says 3.90%, never 4.00%, past tense "paid");
+  **dup-145 refuses cleanly** (digit-free, confident=False). Public eval: 0.093 → 0.1508.
 
 **S0.4 Conflicts stub**
 - Intent: the conflicts report path exists from the first increment.
@@ -257,6 +259,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 |---|---|---|---|---|---|---|---|
 | starter | 2026-11-09 | 0.093 | 1.0 | 1.0 (p95 0.61s) | — | **0.093** | word-overlap is deterministic but ignores traps/tiers/as_of — sanity-checks the PDF's "~0.09" |
 | answers stub (S0.1) | 2026-11-09 | 0.2 | 1.0 | 1.0 | 0.0 | **0.17** | `harness/selftest` synthetic only (not public); refusal path scores; this report = the eval-gate baseline |
+| S0.2+S0.3 tracer (certs) | 2026-11-10 | 0.402 (weighted) | 1.0 | 1.0 (p50 0.0s) | — | **0.1508** | public eval: dup-001 ✅ byte-exact, dup-006 ✅, dup-145 ✅ + 2 more refusals; ingest 1.9–3.4 s for 5 snapshots (3266 pages) |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

@@ -25,6 +25,10 @@ ALLOWED_CONTENT_PREFIXES = ("harness/", "eval/", "starter/", "tools/archived/")
 ALLOWED_CONTENT_FILES = {
     "README.md", "SETUP.md", "PLAN.md", "AGENTS.md",
     "tools/data_leak_guard.py",  # this file quotes the markers it detects
+    # answers/tests/test_unit_table_parser.py quotes the "Rates are effective
+    # as of MM/DD/YYYY" DETECTION PATTERN with fully synthetic dates/lables —
+    # the unit test for the date-marker rule must say the phrase verbatim.
+    "answers/tests/test_unit_table_parser.py",
 }
 # path patterns that must never appear in git at all (outside harness/):
 FORBIDDEN_PATH_RE = re.compile(
