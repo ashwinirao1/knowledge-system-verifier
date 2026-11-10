@@ -10,16 +10,21 @@
     },
     "stale_trap": {
       "n": 2,
-      "score": 0.0
+      "score": 1.0
     },
     "temporal_as_of": {
       "n": 1,
-      "score": 0.0
+      "score": 1.0
     }
   },
   "conflicts": {
-    "f1": 0.0,
-    "resolution_accuracy": 0.0
+    "f1": 1.0,
+    "gold": 1,
+    "matched": 1,
+    "precision": 1.0,
+    "recall": 1.0,
+    "resolution_accuracy": 1.0,
+    "submitted": 1
   },
   "consistency": {
     "paraphrase_consistency": 1.0,
@@ -29,11 +34,13 @@
     "score": 1.0
   },
   "errors": 0,
-  "final_score": 0.17,
+  "final_score": 0.83,
   "ingest_over_limit": false,
   "ingest_seconds": 0.0,
-  "qa_score": 0.2,
+  "qa_score": 0.8,
   "speed": {
+    "max_s": 0.0,
+    "p50_s": 0.0,
     "p95_s": 0.0,
     "score": 1.0
   }

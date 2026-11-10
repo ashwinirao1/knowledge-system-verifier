@@ -16,6 +16,11 @@ REFUSAL = (
     "Please contact us."
 )
 
+DISAGREEMENT_NOTE = (
+    "Some pages on the site currently disagree for this item; we used the more "
+    "authoritative statement per page class and effective date."
+)
+
 
 def fmt_money(v: float | None) -> str:
     if v is None:
@@ -58,7 +63,10 @@ def cert_answer(claims: list[Claim], present_tense: bool = True) -> str:
         payable = fmt_rate(c)
         minimum = fmt_money(c.min_earn)
         verb = "pays" if present_tense else "paid"
-        parts.append(f"the {cert_label(c)} {verb} {payable} APY ({minimum} minimum)")
+        part = f"the {cert_label(c)} {verb} {payable} APY"
+        if minimum:
+            part += f" ({minimum} minimum)"
+        parts.append(part)
     if not parts:
         return REFUSAL
     return parts[0][0].upper() + parts[0][1:] + ("." if len(parts) == 1 else "; " + "; ".join(parts[1:]) + ".")

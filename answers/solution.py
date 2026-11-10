@@ -43,6 +43,7 @@ import json  # noqa: E402
 import certificates as certificates_mod  # noqa: E402
 import classify as classify_mod  # noqa: E402
 import cleaning as cleaning_mod  # noqa: E402
+import conflicts as conflicts_mod  # noqa: E402
 import ledger as ledger_mod  # noqa: E402
 import question as question_mod  # noqa: E402
 import synthesize as synth  # noqa: E402
@@ -88,6 +89,8 @@ class CurrentTruth:
         for tab in tables_mod.parse_tables(text):
             for claim in certificates_mod.extract_certificates(tab):
                 self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
+        for claim in certificates_mod.extract_prose_certificates(text):
+            self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
 
     def _store_claim(self, claim: dict, page, page_type: str, rank: float,
                      snap_id: str, snap_date: str) -> None:
@@ -148,16 +151,29 @@ class CurrentTruth:
         present_tense = as_of_iso is None or snap_id == trust_mod.snapshot_id_as_of(self.ledger.snapshot_dates(), None)
         text = synth.cert_answer(ordered, present_tense=present_tense)
         src = ordered[0]
+        # conflict_note only when sources genuinely disagreed IN THIS VIEW (R5):
+        # same canonical key, >1 distinct surviving VALUE in the snapshot.
+        note = None
+        groups: dict[tuple, set] = {}
+        for c in kept:
+            groups.setdefault(trust_key(c), set()).add(c.value_text)
+        if any(len(v) > 1 for v in groups.values()):
+            note = synth.DISAGREEMENT_NOTE
         return Answer(
             text=text,
             sources=[Source(url=src.page_url, snapshot_id=snap_id, quote=src.quote)],
             confident=True,
-            conflict_note=None,
+            conflict_note=note,
         )
 
     def conflicts(self) -> list:
-        """S0.4 arrives later; the path must exist and stay honest until then."""
-        return []
+        """Every contradiction the site shows now: same key, different values."""
+        return conflicts_mod.generate(self)
+
+
+def trust_key(c) -> tuple:
+    return (c.tier_dims["term_months"], c.tier_dims.get("jumbo"), c.tier_dims.get("special"),
+            c.tier_dims.get("ira_type"), c.tier_dims.get("member"))
 
 
 def build():

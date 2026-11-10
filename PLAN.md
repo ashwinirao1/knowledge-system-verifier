@@ -143,12 +143,26 @@ an increment moved us. The Eval Ledger (§7) is the scoreboard of record.*
   (as_of clamps to the 2026-05-19 snapshot: says 3.90%, never 4.00%, past tense "paid");
   **dup-145 refuses cleanly** (digit-free, confident=False). Public eval: 0.093 → 0.1508.
 
-**S0.4 Conflicts stub**
+**S0.4 Conflicts stub — DONE (2026-11-10)**
 - Intent: the conflicts report path exists from the first increment.
 - Tasks
-  - [ ] Generator v0: same canonical key, ≥2 distinct values in same view → Conflict with resolution + reason
-  - [ ] Validate against `harness/selftest/conflicts_gold.json` (t1: 6-month cert 2.95% vs 3.50%)
-- Done when: selftest conflict matched, correct winner reported.
+  - [x] Prose extractor (`answers/certificates.py::extract_prose_certificates`): sentence-form
+    cert rates ("6-month certificate APY: 2.95%", "Summer special: 6-month certificate APY 2.95% …")
+    so promo/trap pages enter the ledger; `special` token taken only from text between term and
+    "certificate" so a leading "Summer special:" never forks the canonical key
+  - [x] Generator v0 (`answers/conflicts.py`): same canonical key + ≥2 distinct values **in the
+    latest snapshot view** → Conflict with winner + reason (freshest effective date, else
+    page-class authority); R5 precision: replicas count once, tier differences are not conflicts
+  - [x] `conflict_note` on answers: digit-free `DISAGREEMENT_NOTE` when the answered key holds
+    >1 distinct value in the same view; answer text stays value-pure (R1)
+  - [x] Validate against `harness/selftest/conflicts_gold.json` (c1: 6-month cert 2.95% vs 3.50%,
+    correct 3.50%)
+- Done when: ✅ selftest conflicts **F1 = 1.0, resolution_accuracy = 1.0**; selftest final 0.17 →
+  **0.83** (t1/t1b/t2/t4 now 1.0; t3 "lost debit card fee" = fees family, out of certificates
+  tracer scope, deferred to T1). Real-corpus conflicts: **0 — truthful**, because certificate
+  rates exist only in tables there (prose-verified: zero prose rate lines in all 5 snapshots);
+  conflicts machinery is exercised by the synthetic promo-trap fixture. Public eval unchanged:
+  0.1508 (no regressions).
 
 **S0.5 Playback review (tracer-bullet retro)**
 - [ ] Demo: run scorer, show ledger contents, one conflict, one refusal
@@ -260,6 +274,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | starter | 2026-11-09 | 0.093 | 1.0 | 1.0 (p95 0.61s) | — | **0.093** | word-overlap is deterministic but ignores traps/tiers/as_of — sanity-checks the PDF's "~0.09" |
 | answers stub (S0.1) | 2026-11-09 | 0.2 | 1.0 | 1.0 | 0.0 | **0.17** | `harness/selftest` synthetic only (not public); refusal path scores; this report = the eval-gate baseline |
 | S0.2+S0.3 tracer (certs) | 2026-11-10 | 0.402 (weighted) | 1.0 | 1.0 (p50 0.0s) | — | **0.1508** | public eval: dup-001 ✅ byte-exact, dup-006 ✅, dup-145 ✅ + 2 more refusals; ingest 1.9–3.4 s for 5 snapshots (3266 pages) |
+| S0.4 conflicts | 2026-11-10 | 0.8 (selftest qa) | 1.0 | 1.0 | **1.0** (F1 1.0, resolution 1.0) | **0.83 selftest** / **0.1508 public** | gold c1 matched w/ correct winner; 0 real-corpus conflicts is truthful (cert rates only in tables); 58 tests, coverage 88% |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

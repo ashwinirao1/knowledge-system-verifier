@@ -29,6 +29,11 @@ ALLOWED_CONTENT_FILES = {
     # as of MM/DD/YYYY" DETECTION PATTERN with fully synthetic dates/lables —
     # the unit test for the date-marker rule must say the phrase verbatim.
     "answers/tests/test_unit_table_parser.py",
+    # answers/tests/test_component_conflicts.py: fixtures build synthetic
+    # rate sheets whose table-level effective-date statement is part of the
+    # RULE UNDER TEST (freshest-date wins); all dates/URLs are fake
+    # (example.org, 2026 synthetic dates) — no corpus text.
+    "answers/tests/test_component_conflicts.py",
 }
 # path patterns that must never appear in git at all (outside harness/):
 FORBIDDEN_PATH_RE = re.compile(

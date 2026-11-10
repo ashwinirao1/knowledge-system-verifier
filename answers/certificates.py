@@ -29,6 +29,16 @@ _CERT_TOKEN_RE = re.compile(r"certificate|special|jumbo|fixed", re.I)
 _CERT_SECTION_RE = re.compile(r"certificate", re.I)
 _IRA_SECTION_RE = re.compile(r",?\bIRAs?\b", re.I)
 
+# prose forms ("6-month certificate APY: 2.95%", "Summer special: 6-month
+# certificate APY 2.95% (offer ended 2025-09-30)") — rates stated in a sentence
+# rather than a table (promo pages, blog posts, hub prose).
+_PROSE_RATE_RE = re.compile(
+    r"(\d{1,2})\s*[-\s]?\s*month\s+(?:fixed\s+)?((?:jumbo\s+)?(?:special\s+)?)?"
+    r"certificates?\s*(?:special)?\s*"
+    r"(?:APY|rate|yield|dividend rate)\s*:?[\s*]*(\d{1,2}(?:\.\d+)?)\s*%",
+    re.I,
+)
+
 # columns we can use (canonical header text, fallback patterns)
 def _col_index(headers: list[str], needles: list[str]) -> int:
     for i, h in enumerate(headers):
@@ -100,4 +110,34 @@ def extract_certificates(tab: Table) -> list[dict]:
             v = _first_pct(cells[div_i])
             if v is not None:
                 claims.append({**base, "metric": "dividend_rate", "value": v})
+    return claims
+
+
+def extract_prose_certificates(text: str) -> list[dict]:
+    """Cert-family claims stated in prose lines rather than tables (S0.4 need:
+    the promo/trap pages that old rates linger on use sentence forms)."""
+    claims: list[dict] = []
+    for line in text.split("\n"):
+        s = line.strip()
+        if not s or s.startswith("|") or s.startswith("#"):
+            continue
+        for m in _PROSE_RATE_RE.finditer(s):
+            term = int(m.group(1))
+            tail = (m.group(2) or "").lower()
+            dims = {
+                "term_months": term,
+                "jumbo": "jumbo" in tail,
+                "special": bool(tail),   # token between term and "certificate" only,
+                "ira_type": None,        # so "Summer special:" doesn't fork the key
+            }
+            value = float(m.group(3))
+            # sentence form states the yield; there is no separate dividend rate
+            claims.append({
+                "tier_dims": dims,
+                "metric": "apy",
+                "value": value,
+                "min_earn": None,
+                "quote": s[:200],
+                "effective_date": None,
+            })
     return claims

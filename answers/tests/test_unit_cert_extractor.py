@@ -67,5 +67,29 @@ class TestRowGrammar(unittest.TestCase):
         self.assertIn("17 Month Fixed Certificate Special", cl["quote"])
 
 
+class TestProseExtractor(unittest.TestCase):
+    def test_plain_sentence_form(self):
+        claims = C.extract_prose_certificates("6-month certificate APY: 2.95%")
+        self.assertEqual(len(claims), 1)
+        self.assertEqual(claims[0]["tier_dims"]["term_months"], 6)
+        self.assertEqual(claims[0]["value"], 2.95)
+        self.assertFalse(claims[0]["tier_dims"]["special"])
+
+    def test_promo_sentence_with_leading_words(self):
+        claims = C.extract_prose_certificates(
+            "Summer special: 6-month certificate APY 2.95% (offer ended 2025-09-30)"
+        )
+        self.assertEqual(len(claims), 1)
+        # "Summer special:" must NOT fork the key into a special variant
+        self.assertFalse(claims[0]["tier_dims"]["special"])
+
+    def test_table_rows_not_double_parsed_as_prose(self):
+        line = "| 6 Month | 3.37% | 3.50%1 | $1,000 |"
+        self.assertEqual(C.extract_prose_certificates(line), [])
+
+    def test_non_cert_lines_skipped(self):
+        self.assertEqual(C.extract_prose_certificates("Lost debit card replacement fee: $2.50"), [])
+
+
 if __name__ == "__main__":
     unittest.main()
