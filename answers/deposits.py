@@ -13,6 +13,8 @@ carries  member  (page-level, set by the ingest driver) and
 {tier_low, tier_high, tier_text}. Replica rows across pages collapse by
 content hash exactly like certificates.
 """
+from __future__ import annotations
+
 import re
 
 _MONEY_NUM_RE = re.compile(r"\$?\s*([\d,]+(?:\.\d+)?|\d+(?:\.\d+)?)")

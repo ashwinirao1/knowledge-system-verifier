@@ -10,6 +10,8 @@ R5 precision rules implemented here:
 Trust resolution (~AGENTS §3): page-class authority, then freshest
 table-level effective date, then the ledger's stable tie-breaking.
 """
+from __future__ import annotations
+
 import re
 
 from contract import Conflict, Source
