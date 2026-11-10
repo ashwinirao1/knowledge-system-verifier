@@ -46,6 +46,11 @@ ALLOWED_CONTENT_FILES = {
     # URLs are synthetic (example.org) — no corpus text.
     "answers/tests/test_unit_loans.py",
     "answers/tests/test_component_loan_answers.py",
+    # S1.3 cards fixtures: synthetic card tables (Platinum/Rewards Visa, APR
+    # ranges + intro flag) whose table-level effective-date statement is part
+    # of the parse rules under test; all synthetic (example.org) — no corpus text.
+    "answers/tests/test_unit_cards.py",
+    "answers/tests/test_component_card_answers.py",
 }
 # path patterns that must never appear in git at all (outside harness/):
 FORBIDDEN_PATH_RE = re.compile(

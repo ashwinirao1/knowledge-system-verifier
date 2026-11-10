@@ -250,9 +250,25 @@ quality, security, data boundary — before any ledger row means anything.**
   hub-vs-blog, auto hub-vs-promo), all rank-resolved; selftest unchanged (0.83, F1 1.0);
   +751 loan claims; ingest 2.8 s; 104 tests.
 
-**S1.3 Cards (personal + business)** incl. intro vs standard APR qualifiers
-- [ ] Card entity + standard vs intro APR dims (intro duration e.g. 90 days)
-- Done when: dup-034 (four cards), dup-035/dup-040 (standard 12.5%, not intro) pass.
+**S1.3 Cards (personal + business) — DONE (2026-11-10)** incl. intro vs standard APR qualifiers
+- [x] Card table grammar (`answers/cards.py`): `| Card Type | APR |` sheets; APR ranges parsed
+  (low bound = claim value, high bound = tier dim, `12.50% – 19.50%` kept as value_text);
+  intro rows (`Introductory Balance Transfer Rate`) flagged `rate_period="intro"`; product from
+  row label first, then the section heading, business aliases matched first so "Platinum Visa"
+  inside "Business Platinum Visa" cannot mis-alias
+- [x] Question grammar (`question.py::_parse_cards`): credit card/visa triggers; named products;
+  business-only vs personal filters; standard-vs-intro stays a TEMPLATE distinction (asking for
+  the standard rate states the intro caveat from its own claim, never a bare number)
+- [x] List template: one phrase per card, standard APR first, intro labelled
+  ("…: 12.50% – 19.50% standard APR (2.90% intro APR on balance transfers only)")
+- [x] `tables.py` single-digit effective dates now zero-padded (`1/1/2026` → `2026-01-01`,
+  chronological string sort stays correct)
+- Done when: ✅ **dup-034 (four cards, 12.5/20.5 included, no 9.9%/artifact text), dup-035
+  (standard 12.50–19.50% with the intro-worded caveat; 9.9% trap impossible by construction —
+  corpus has no 9.9%), dup-040 (12.5/15.5 incl. business cards) — all zero traps**. Public eval
+  0.3872 → **0.4601** (list_completeness 0→0.46, tier_disambiguation 0.83→1.00, no regressions).
+  Card claims +5; conflicts unchanged at 27 (card statements agree corpus-wide — no false
+  positives added); selftest 0.83; 123 tests.
 
 **S1.4 Branch knowledge** (hours, addresses, closures)
 - [ ] `/contact` locator parse: branch → {lobby, drive-up} hours, address; closure events from newsroom (Hy-Vee → closed 2026-03-31, replaced by Key West + Sycamore)
@@ -324,6 +340,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S0.4 conflicts | 2026-11-10 | 0.8 (selftest qa) | 1.0 | 1.0 | **1.0** (F1 1.0, resolution 1.0) | **0.83 selftest** / **0.1508 public** | gold c1 matched w/ correct winner; 0 real-corpus conflicts is truthful (cert rates only in tables); 58 tests, coverage 88% |
 | S1.1 deposits | 2026-11-10 | 0.485 (weighted) | 1.0 | 1.0 | — | **0.2671 public** / 0.83 selftest | dup-045/046/049/052 ✅ zero traps; tier_disambiguation 0.17→0.50, current_value 0→0.33, conflict_resolution 0→0.33, entity_attribution 0→0.25; 6 false achieve-MM conflicts killed via rate_period qualifier dim (no URL special-casing); 82 tests |
 | S1.2 loans | 2026-11-10 | 0.585 (weighted) | 1.0 | 1.0 | — | **0.3872 public** / 0.83 selftest | dup-016/017/009/011/028 ✅ zero traps; stale_trap 0.02→0.39, tier_disambiguation 0.50→0.83; 27 real loan conflicts (mortgage hub-vs-blog, auto hub-vs-promo) rank-resolved; stale rows trust-RESOLVED not dropped (purpose-from-label family); 104 tests |
+| S1.3 cards | 2026-11-10 | 0.665 (weighted) | 1.0 | 1.0 | — | **0.4601 public** / 0.83 selftest | dup-034/035/040 ✅ zero traps; list_completeness 0→0.46, tier_disambiguation 0.83→1.00; intro-vs-standard forking value-safe; single-digit dates zero-padded; 123 tests |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

@@ -71,6 +71,39 @@ _MODEL_YEAR_Q_RE = re.compile(
 _TERM_YEARS_RE = re.compile(r"\b(\d{1,2})\s*[-\s]?years?\b", re.I)
 
 
+# ------------------------------------------------------------------ cards (S1.3)
+_CARDS_TRIGGER_RE = re.compile(r"\bcredit cards?\b|\bvisa\b", re.I)
+_CARDS_PRODUCT_RES = [
+    (re.compile(r"\bbusiness\s+platinum\b", re.I), "business_platinum_visa"),
+    (re.compile(r"\bbusiness\s+rewards\b", re.I), "business_rewards_visa"),
+    (re.compile(r"\bplatinum\s+visa\b", re.I), "platinum_visa"),
+    (re.compile(r"\brewards\s+visa\b", re.I), "rewards_visa"),
+]
+_CARDS_BUSINESS_RE = re.compile(r"\bbusiness\b", re.I)
+_CARDS_PERSONAL_RE = re.compile(r"\bpersonal\b", re.I)
+
+
+def _parse_cards(q: str) -> dict | None:
+    if not _CARDS_TRIGGER_RE.search(q):
+        return None
+    products: list[str] = []
+    for rx, canon in _CARDS_PRODUCT_RES:
+        if rx.search(q):
+            products.append(canon)
+    member = None
+    if _CARDS_BUSINESS_RE.search(q):
+        member = "business"
+    elif _CARDS_PERSONAL_RE.search(q):
+        member = "personal"
+    rate_period = "standard" if re.search(r"\bstandard\b|\bpurchase\b", q) else None
+    return {
+        "family": "cards",
+        "products": products,
+        "member": member,
+        "rate_period": rate_period,
+    }
+
+
 def _parse_loan(q: str) -> dict | None:
     # ARM / non-conventional products are not on any rate sheet corpus-wide:
     # answering with the fixed-conventional tiers would be a wrong-fact answer.
@@ -126,7 +159,10 @@ def parse_question(question: str) -> dict | None:
     slots = _parse_deposit(q)
     if slots:
         return slots
-    return _parse_loan(q)
+    slots = _parse_loan(q)
+    if slots:
+        return slots
+    return _parse_cards(q)
 
 
 def _parse_certificate(q: str) -> dict | None:

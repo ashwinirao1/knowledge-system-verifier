@@ -31,6 +31,10 @@ def _key_of(c) -> tuple:
 def _topic_text(claim) -> str:
     """Human topic from canonical dims — member phrasing ("6-Month certificate APY")."""
     d = claim.tier_dims
+    if d.get("kind") == "card":  # cards
+        name = d.get("card_display") or d.get("card")
+        word = "intro APR" if d.get("rate_period") == "intro" else "APR"
+        return f"{name} {word}"
     if "family" in d:  # loans
         bits = []
         if d.get("family_display"):
@@ -105,6 +109,7 @@ _FAMILY_VIEWS = (
     ("deposit", "dividend_rate"),
     ("loans", "apr"),
     ("loans", "rate"),
+    ("cards", "apr"),
 )
 
 

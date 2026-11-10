@@ -209,5 +209,71 @@ def loan_answer(claims: list[Claim], slots: dict, present_tense: bool = True) ->
                                             "; " + "; ".join(parts[1:]) + ".")
 
 
+# --------------------------------------------------------------------- cards
+def _apr_text(claim: Claim) -> str:
+    """'12.50% – 19.50%' for ranges, '15.50%' for a single value."""
+    high = claim.tier_dims.get("apr_high")
+    low_s = f"{claim.value:.2f}%"
+    if high is None:
+        return low_s
+    return f"{low_s} – {high:.2f}%"
+
+
+_CARDS_ORDER = [
+    "platinum_visa", "rewards_visa",
+    "business_platinum_visa", "business_rewards_visa",
+]
+
+
+def cards_list(claims: list[Claim], present_tense: bool = True) -> str:
+    """One phrase per card: standard APR first, then the intro APR line.
+
+    R1 rails: only corpus values; the intro value is labelled as intro so the
+    standard rate can never be confused with the promotional one.
+    """
+    by_card: dict[str, dict] = {}
+    for c in claims:
+        by_card.setdefault(c.tier_dims["card"], {})[c.tier_dims.get("rate_period")] = c
+    parts = []
+    for canon in _CARDS_ORDER:
+        bits = by_card.get(canon)
+        if not bits:
+            continue
+        std = bits.get(None)
+        intro = bits.get("intro")
+        if not std and not intro:
+            continue
+        c = std or intro
+        name = c.tier_dims["card_display"]
+        if std and intro:
+            parts.append(
+                f"{name}: {_apr_text(std)} standard APR "
+                f"({_apr_text(intro)} intro APR on balance transfers only)"
+            )
+        elif std:
+            parts.append(f"{name}: {_apr_text(std)} APR")
+        else:
+            parts.append(f"{name}: {_apr_text(intro)} intro APR")
+    if not parts:
+        return REFUSAL
+    return "Currently: " + "; ".join(parts) + "."
+
+
+def card_standard(claims: list[Claim], present_tense: bool = True) -> str:
+    """'The standard purchase APR on the Platinum Visa is 12.50% – 19.50%;
+    the 2.90% intro APR applies only to balance transfers in the first 90 days.'
+    The intro caveat is corpus-stated (intro rows exist for this card)."""
+    std = next((c for c in claims if c.tier_dims.get("rate_period") is None), None)
+    intro = next((c for c in claims if c.tier_dims.get("rate_period") == "intro"), None)
+    if std is None:
+        return REFUSAL
+    name = std.tier_dims["card_display"]
+    text = f"The standard purchase APR on the {name} is {_apr_text(std)}."
+    if intro is not None:
+        text += (f" The {_apr_text(intro)} intro APR is separate: it applies "
+                 "only to balance transfers.")
+    return text
+
+
 def refusal() -> tuple[str, None]:
     return REFUSAL, None

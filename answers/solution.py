@@ -40,6 +40,7 @@ if _answers not in sys.path:
 import hashlib  # noqa: E402
 import json  # noqa: E402
 
+import cards as cards_mod  # noqa: E402
 import certificates as certificates_mod  # noqa: E402
 import classify as classify_mod  # noqa: E402
 import cleaning as cleaning_mod  # noqa: E402
@@ -56,6 +57,7 @@ from contract import Answer, Snapshot, Source  # noqa: E402
 PRODUCT = "certificate"
 DEPOSIT_PRODUCT = "deposit"
 LOAN_PRODUCT = "loans"
+CARDS_PRODUCT = "cards"
 
 
 def _content_hash(product: str, metric: str, tier_dims: dict, value_text: str, eff: str | None) -> str:
@@ -97,6 +99,8 @@ class CurrentTruth:
                 self._store_deposit_claim(claim, page, page_type, rank, snap_id, snap_date)
             for claim in loans_mod.extract_loans(tab):
                 self._store_loan_claim(claim, page, page_type, rank, snap_id, snap_date)
+            for claim in cards_mod.extract_cards(tab):
+                self._store_card_claim(claim, page, page_type, rank, snap_id, snap_date)
         for claim in certificates_mod.extract_prose_certificates(text):
             self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
 
@@ -159,6 +163,21 @@ class CurrentTruth:
             quote=claim.get("quote"), content_hash=content_hash,
         )
 
+    def _store_card_claim(self, claim: dict, page, page_type: str, rank: float,
+                          snap_id: str, snap_date: str) -> None:
+        dims = {**claim["tier_dims"]}
+        value = claim["value"]
+        value_text = f"{value:.2f}%"
+        eff = claim.get("effective_date")
+        content_hash = _content_hash(CARDS_PRODUCT, claim["metric"], dims, value_text, eff)
+        self.ledger.add_claim(
+            product=CARDS_PRODUCT, metric=claim["metric"], tier_dims=dims, value=value,
+            value_text=value_text, min_earn=None,
+            effective_date=eff, page_url=page.url, page_type=page_type,
+            page_rank=rank, snapshot_id=snap_id, snapshot_date=snap_date,
+            quote=claim.get("quote"), content_hash=content_hash,
+        )
+
     def answer(self, question: str, as_of: Optional[str] = None) -> Answer:
         slots = question_mod.parse_question(question)
         if not slots:
@@ -173,6 +192,8 @@ class CurrentTruth:
             return self._answer_deposit(slots, snap_id, as_of_iso)
         if slots["family"] == "loans":
             return self._answer_loans(slots, snap_id, as_of_iso)
+        if slots["family"] == "cards":
+            return self._answer_cards(slots, snap_id, as_of_iso)
         claims = self.ledger.all_claims_snapshot(snap_id, PRODUCT, slots["metric"])
         # tier filter: exact dims we know, leave unspecified dims open
         kept = []
@@ -401,6 +422,56 @@ class CurrentTruth:
             ),
         )
 
+    # ----------------------------------------------------------------- cards
+    _CARDS_ORDER = ("platinum_visa", "rewards_visa",
+                    "business_platinum_visa", "business_rewards_visa")
+
+    def _answer_cards(self, slots: dict, snap_id: str, as_of_iso: str | None) -> Answer:
+        """Card-family answer: products (+ standard-vs-intro clarity) → trust → template."""
+        claims = self.ledger.all_claims_snapshot(snap_id, CARDS_PRODUCT, "apr")
+        products = set(slots["products"]) or None
+        member = slots.get("member")
+        kept = []
+        for c in claims:
+            d = c.tier_dims
+            canon = d.get("card")
+            if products is not None and canon not in products:
+                continue
+            if member and canon.startswith("business_") != (member == "business"):
+                continue
+            kept.append(c)
+        if not kept:
+            text, _ = synth.refusal()
+            return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        winners = list(trust_mod.pick_winners(kept).values())
+
+        order = {canon: i for i, canon in enumerate(self._CARDS_ORDER)}
+        if not products:
+            text = synth.cards_list(winners)
+            chosen = sorted(
+                winners,
+                key=lambda c: (order.get(c.tier_dims["card"], 99),
+                               c.tier_dims.get("rate_period") or ""),
+            )
+        else:
+            text = synth.card_standard(winners)
+            std = next((c for c in winners if c.tier_dims.get("rate_period") is None), None)
+            chosen = [std or winners[0]]
+
+        src = sorted(chosen, key=lambda c: (-c.page_rank, c.page_url))[0]
+        note = None
+        groups: dict[tuple, set] = {}
+        for c in kept:
+            groups.setdefault(trust_key(c), set()).add(c.value_text)
+        if any(len(v) > 1 for v in groups.values()):
+            note = synth.DISAGREEMENT_NOTE
+        return Answer(
+            text=text,
+            sources=[Source(url=src.page_url, snapshot_id=snap_id, quote=src.quote)],
+            confident=True,
+            conflict_note=note,
+        )
+
     def _present(self, snap_id: str, as_of_iso: str | None) -> bool:
         return as_of_iso is None or snap_id == trust_mod.snapshot_id_as_of(self.ledger.snapshot_dates(), None)
 
@@ -411,6 +482,8 @@ class CurrentTruth:
 
 def trust_key(c) -> tuple:
     d = c.tier_dims
+    if d.get("kind") == "card":  # cards
+        return (d["card"], d.get("rate_period"))
     if "family" in d:  # loans
         return (d.get("family"), d.get("term_months"), d.get("term_years"),
                 d.get("model_from"), d.get("model_to"), d.get("amount_up_to"),

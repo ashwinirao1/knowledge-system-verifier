@@ -116,7 +116,7 @@ def _effective_date_after(lines: list[str], start: int, n: int) -> str | None:
         m = _TABLE_LEVEL_DATE_RE.match(line.strip())
         if m:
             mm, dd, yyyy = m.groups()
-            return f"{yyyy}-{mm}-{dd}"
+            return f"{yyyy}-{int(mm):02d}-{int(dd):02d}"
         grouped += 1
         # table-level statements normally sit within a few prose/footnote lines
         # of the table; beyond that they belong to some later table.
