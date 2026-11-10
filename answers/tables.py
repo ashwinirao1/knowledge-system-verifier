@@ -1,12 +1,17 @@
-"""Markdown table extraction (S0.2).
+"""Markdown table extraction (S0.2/S2.1).
 
-The corpus renders rate sheets as GFM tables plus a table-level
-"Rates are effective as of MM/DD/YYYY" statement that FOLLOWS the table.
-Footnote lines also contain that phrase ("1Fixed Jumbo ... Rate: ..."), and
-some footnotes even *start* with "Rates are effective as of" inside footnote
-blocks — so a naive contains() scan picks up the wrong date. The discriminator
-used here: the table-level statement line STARTS with the phrase (after
-optional markdown emphasis), never with a footnote marker.
+The corpus renders rate sheets as GFM tables plus a table-level effective-date
+statement that FOLLOWS the table. The statement has two published phrasings —
+"Rates are effective as of MM/DD/YYYY" and the shorter "Rates effective
+MM/DD/YYYY" (both with padded and unpadded month/day) — and a page may carry
+SEVERAL tables each with its OWN date, so dates are searched per table, never
+per page. Footnote lines also contain that phrase ("1Fixed Jumbo ... Rate:
+..."), and some footnotes even *start* with "Rates are effective as of" inside
+footnote blocks — so a naive contains() scan picks up the wrong date. The
+discriminator used here: the table-level statement line STARTS with the phrase
+(after optional markdown emphasis), never with a footnote marker. The search
+also stops at the next table's start, so a later table's date can never bleed
+into an earlier one.
 """
 from __future__ import annotations
 
@@ -14,7 +19,9 @@ import re
 from dataclasses import dataclass, field
 
 _TABLE_LEVEL_DATE_RE = re.compile(
-    r"^\s*(?:\*{1,2}|\_)?\s*Rates are effective as of\s+(\d{1,2})/(\d{1,2})/(\d{4})",
+    r"^\s*(?:\*{1,2}|\_)?\s*"
+    r"Rates\s+(?:are\s+effective\s+as\s+of|effective)\s+"
+    r"(\d{1,2})/(\d{1,2})/(\d{4})",
     re.I,
 )
 _CELL_SPLIT_RE = re.compile(r"\s*\|\s*")
@@ -45,7 +52,7 @@ def _is_separator_row(cells: list[str]) -> bool:
     return bool(cells) and all(re.fullmatch(r":?-{1,}:?", c) for c in cells)
 
 
-_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z /&'()\.\-]{1,55}\*?$")
+_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z ,/&'()\.\-]{1,55}\*?$")
 
 
 def _paragraph_heading(line: str) -> str | None:

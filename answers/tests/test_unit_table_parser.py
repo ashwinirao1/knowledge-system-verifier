@@ -72,5 +72,62 @@ class TestTableParser(unittest.TestCase):
         self.assertIn("4.10%2", tab.raw_rows[1])
 
 
+class TestEffectiveDatePhrasings(unittest.TestCase):
+    """S2.1: the corpus publishes the statement in two phrasings and both
+    padded and unpadded month/day — every table-level variant must parse."""
+
+    def _one_table(self, statement: str):
+        text = "| Term | APR |\n| - | - |\n| 60 Months | 5.34% |\n\n" + statement + "\n"
+        return T.parse_tables(text)[0]
+
+    def test_short_phrasing_rates_effective(self):
+        self.assertEqual(
+            self._one_table("Rates effective 01/01/2023. All loans are subject to approval.").effective_date,
+            "2023-01-01",
+        )
+
+    def test_unpadded_month_day(self):
+        self.assertEqual(
+            self._one_table("Rates are effective as of 1/1/2026. All loans are subject to approval.").effective_date,
+            "2026-01-01",
+        )
+
+    def test_bold_short_phrasing(self):
+        self.assertEqual(
+            self._one_table("**Rates effective 02/01/2026.**").effective_date,
+            "2026-02-01",
+        )
+
+    def test_bare_date_line_is_not_a_table_statement(self):
+        # bare dates appear only inside legacy PDF dumps, never as a
+        # table-level statement on rate pages
+        self.assertIsNone(self._one_table("02/07/2025").effective_date)
+
+    def test_footnote_variant_still_loses_to_table_level(self):
+        text = (
+            "| Term | APR |\n| - | - |\n| 60 Months | 5.34% |\n\n"
+            "Rates effective 01/01/2023. All loans are subject to approval.\n"
+            "1Rates effective 05/05/2025 inside a footnote sentence.\n"
+        )
+        self.assertEqual(T.parse_tables(text)[0].effective_date, "2023-01-01")
+
+
+class TestSectionHeadings(unittest.TestCase):
+    """S2.1: vehicle family headings carry commas ('ATV, Snowmobile & Jet Ski
+    Loans') — they must be recognised as the table's section, not absorbed
+    into the previous table's context."""
+
+    def test_comma_heading_captured(self):
+        text = (
+            "Boat & RV Loans\n\n"
+            "| Loan Amount | Term | APR |\n| - | - | - |\n| $10,000-24,999 | 36 Months | 7.29% |\n\n"
+            "ATV, Snowmobile & Jet Ski Loans\n\n"
+            "| Loan Program | Term | APR |\n| - | - | - |\n| Model Year 2026-23 | 36 Months | 8.34% |\n"
+        )
+        tabs = T.parse_tables(text)
+        self.assertEqual(tabs[0].section, "Boat & RV Loans")
+        self.assertEqual(tabs[1].section, "ATV, Snowmobile & Jet Ski Loans")
+
+
 if __name__ == "__main__":
     unittest.main()

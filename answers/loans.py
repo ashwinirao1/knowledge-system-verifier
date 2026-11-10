@@ -23,6 +23,11 @@ _MONEY_NUM_RE = re.compile(r"\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
 _PCT_RE = re.compile(r"(\d{1,2}(?:\.\d+)?)\s*%", re.I)
 _TERM_CELL_RE = re.compile(r"^\*{0,2}(\d{1,3})\s*[-\s]?months?\*{0,2}$", re.I)
 _MODEL_RANGE_RE = re.compile(r"(\d{4})\s*[-–]\s*(\d{1,2})\s*[- ]?model\s*year", re.I)
+# some sheets lead with the words: "Model Year 2026-23" — the years are
+# published DESCENDING there (2026 down to 2023), so canonicalise ascending
+_MODEL_RANGE_LEADING_RE = re.compile(
+    r"^\s*model\s*year\s*(\d{4})\s*[-–]\s*(\d{1,2})\b", re.I
+)
 _MODEL_OLDER_RE = re.compile(r"^(\d{4})\s*[- ]?model\s*year.*\(and older\)", re.I)
 _MORTGAGE_LABEL_RE = re.compile(
     r"^(?P<purpose>purchase|refinance):\s*(?P<term>\d{1,2})[- ]year\s*[- ]?fixed\s*"
@@ -82,13 +87,24 @@ def _mortgage_dims(label: str) -> dict | None:
 
 
 def _auto_dims(label: str):
-    """'2024-27 Model Year' -> (2024, 2027); '2016 Model Year (and older)' -> (None, 2016)."""
+    """Model-year labels → ascending (from, to) canonical dims.
+
+    Published shapes: "2024-27 Model Year" (digits first), "Model Year
+    2026-23" (label first, years descending), "2016 Model Year (and older)".
+    """
     s = label.strip()
     m = _MODEL_RANGE_RE.search(s)
     if m:
         lo = int(m.group(1))
         hi_digits = int(m.group(2))
         hi = lo - (lo % 100) + hi_digits if hi_digits < 100 else hi_digits
+        return {"model_from": float(lo), "model_to": float(hi), "model_older": False}
+    m = _MODEL_RANGE_LEADING_RE.match(s)
+    if m:
+        a = int(m.group(1))
+        b_digits = int(m.group(2))
+        b = a - (a % 100) + b_digits if b_digits < 100 else b_digits
+        lo, hi = min(a, b), max(a, b)
         return {"model_from": float(lo), "model_to": float(hi), "model_older": False}
     m = _MODEL_OLDER_RE.match(s)
     if m:
@@ -129,8 +145,13 @@ def extract_loans(tab) -> list[dict]:
             fam, display = ("mortgage_refi", "Refinance") if mdims["purpose"] == "refinance" \
                 else ("mortgage_purchase", "Purchase")
             dims = mdims
-        # auto rows: model-year label regardless of header naming
-        if dims is None and (_MODEL_RANGE_RE.search(label) or _MODEL_OLDER_RE.match(label)):
+        # auto rows: model-year label regardless of header naming — digits
+        # first ("2023–26 Model Year") or label first ("Model Year 2026-23")
+        if dims is None and (
+            _MODEL_RANGE_RE.search(label)
+            or _MODEL_RANGE_LEADING_RE.match(label)
+            or _MODEL_OLDER_RE.match(label)
+        ):
             adims = _auto_dims(label)
             if adims and fam == "other_loans":
                 fam, display = "auto", "Auto & Motorcycle"

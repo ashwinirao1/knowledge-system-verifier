@@ -30,6 +30,21 @@ class TestModelYearDims(unittest.TestCase):
     def test_plain_label_not_a_model_row(self):
         self.assertIsNone(L._auto_dims("48 Months"))
 
+    def test_leading_label_descending_years(self):
+        """'Model Year 2026-23' publishes the years descending — canonical
+        dims must be ascending (2023 through 2026), matching the same span
+        written digits-first elsewhere."""
+        self.assertEqual(
+            L._auto_dims("Model Year 2026-23"),
+            {"model_from": 2023.0, "model_to": 2026.0, "model_older": False},
+        )
+
+    def test_leading_label_two_year_span(self):
+        self.assertEqual(
+            L._auto_dims("Model Year 2022-21"),
+            {"model_from": 2021.0, "model_to": 2022.0, "model_older": False},
+        )
+
 
 class TestMortgageLabels(unittest.TestCase):
     def test_purchase_with_amount(self):

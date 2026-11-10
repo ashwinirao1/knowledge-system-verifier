@@ -330,9 +330,31 @@ quality, security, data boundary — before any ledger row means anything.**
 
 ### T2 — Temporal layer
 
-**S2.1 Effective dates at table granularity**
-- [ ] Effective-date capture adjacent to each table (a page may carry several); date normalisation MM/DD/YYYY
-- Done when: switch-and-earn's 10/22/2024 auto table loses to the 08/31/2026 rate page *without special-casing any URL*.
+**S2.1 Effective dates at table granularity — DONE (2026-11-10)**
+- [x] Effective-date capture adjacent to each table (a page may carry several); date normalisation MM/DD/YYYY → ISO.
+  - Recon found the real defects on the switch-and-earn page (4 tables, 3 statement phrasings):
+    (1) the "Rates effective MM/DD/YYYY" phrasing (42x corpus-wide, no "as of") was unmatched —
+    Boat & RV + ATV tables carried NO date; (2) the ATV table produced ZERO claims — its heading
+    "ATV, Snowmobile & Jet Ski Loans" has a comma the heading regex rejected, so it inherited the
+    previous table's context, and its "Model Year 2026-23" labels (leading words, DESCENDING
+    years) matched no model-year pattern; (3) non-padded "1/1/2026" and the horizon/next-table
+    scoping already worked.
+  - Fixes: tables.py statement regex accepts both phrasings (still anchored at line start so
+    footnote mentions never win); heading charset accepts commas; loans.py parses leading
+    "Model Year YYYY-YY" labels and canonicalises the span ASCENDING (2026-23 → 2023 through
+    2026) so the same span written either way lands in one canonical key.
+  - Trust resolution verified, not changed: pick_winners already orders rank → freshest
+    effective_date → snapshot; the switch-and-earn auto copy (5.34%, eff 1/1/2026, r70) loses to
+    the auto-loans rate page (5.39%, eff 08/31/2026, r100) via the general stack — no URL
+    special-casing. Note: the story's "10/22/2024 auto table" is actually the PERSONAL table on
+    that page (auto carries 1/1/2026 in every snapshot); the done-when's intent — a stale-dated
+    switch-and-earn table loses to the fresher rate page without URL rules — is verified
+    empirically and by test.
+- Done when: ✅ 36 claims from switch-and-earn (was 27; +9 ATV rows recovered, +2 tables dated);
+  four tables → four distinct effective dates; public eval 0.7465 unchanged (zero regressions —
+  no scored question touches the new claims); selftest 0.83 holds; 180 tests on 3.9/3.11/3.14.
+  ATV/snowmobile QUESTION grammar is S3.1 scope (claims are in the ledger now; questions still
+  refuse honestly).
 
 **S2.2 as_of edge handling**
 - [ ] Dates between pulls (05-31 → snap 02), inside the 10-week gap → snap 03, before baseline → earliest+note, after latest → latest
@@ -409,6 +431,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S1.3 cards | 2026-11-10 | 0.665 (weighted) | 1.0 | 1.0 | — | **0.4601 public** / 0.83 selftest | dup-034/035/040 ✅ zero traps; list_completeness 0→0.46, tier_disambiguation 0.83→1.00; intro-vs-standard forking value-safe; single-digit dates zero-padded; 123 tests |
 | S1.4 branch | 2026-11-10 | 0.769 (weighted) | 1.0 | 1.0 | — | **0.6105 public** / 0.83 selftest | dup-064/065/066/068/076/104 ✅ zero traps; branch_info 0→0.97; dup-102 refuse-restored after live catch (named-branch rule); should_refuse 1.00; no branch-conflict false adds (R5 text-claim policy); 141 tests |
 | S1.5 facts | 2026-11-10 | 0.7465 | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | dup-008/080/082/031/060/088/094 all 1.0 ✅ zero traps; ZERO regressions across the 33 prior items (7 gains: six 0.0→1.0 + dup-008 0.15→1.0); dup-088 = chronological series (294 in 2023; 256 in 2024 — eval expects 294 with a fresher 2025 post in every snapshot, so series replay, not fresher-wins); program binding refuses unknown names digit-free; facts excluded from conflicts (R5); ingest ~4 s (0.2% of budget, measured via tools/profile_ingest.py); 168 tests, ruff + leak guard clean |
+| S2.1 table dates | 2026-11-10 | 0.7465 (unchanged) | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | switch-and-earn page: 27→36 claims (+9 ATV rows recovered, +2 tables dated); 4 tables → 4 distinct effective dates across 3 statement phrasings ("Rates effective" variant added; comma headings; leading/descending "Model Year 2026-23" labels canonicalised ascending); stale promo copy loses to the 08/31/2026 rate page via the general stack — NO URL special-casing; zero regressions (no scored question touches the new claims); 180 tests |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |
