@@ -207,6 +207,36 @@ because Home$tart was the only program in the ledger. That is a confidently
 wrong answer about the wrong thing — the worst failure class we have. Refusing
 costs one question; leaking costs trust in every answer.
 
+## Decision 8 — Answers are pure functions, cacheable by construction
+
+**Decision:** repeated queries are answered identically *without* a cache:
+the answer path is a pure function (parse slots → snapshot clamp → indexed
+lookup → deterministic tie-break → pure template). Memoization (plan story
+S4.2) is layered on top as an optimization, never as the correctness
+mechanism.
+
+**Why (plain):** determinism by construction beats determinism by cache.
+A cache can be cold, evicted or stale; a pure function cannot. The eval's
+repeat and paraphrase checks pass because two equivalent questions parse to
+the same slots and hit the same template — not because we stored anything.
+
+**The cache design, when we add it:** key on (parsed slots, normalized
+as_of, index version), never the raw question string. Keying on slots means
+reworded-but-equivalent questions share one computation; keying on index
+version means zero invalidation logic (the ledger is immutable per run; in a
+fleet, the published artifact generation *is* the cache namespace). Cache
+refusals too — they are deterministic. In production: an in-process LRU on
+every server, plus a shared cache only for genuinely expensive tiers
+(fallback scans on a large corpus). A 0.5 ms cache hit that saves a 0.1 ms
+recompute is a loss — cache only what is expensive.
+
+**The deeper point:** this is a hidden dividend of template-only synthesis.
+An LLM-generated answer is not a pure function of its inputs, so it is
+nearly uncacheable — every "hit" is a gamble on stochastic output. Template
+answers make `answer()` idempotent, which lets caching be correct by
+construction instead of a consistency liability. Deterministic systems and
+caches get along; stochastic systems and caches fight.
+
 ## Issues we hit and how we fixed them (the interview stories)
 
 1. **The unhashable tuple.** Wallet names were stored as a Python tuple in
