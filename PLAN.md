@@ -596,9 +596,21 @@ quality, security, data boundary — before any ledger row means anything.**
 - Hidden-eval insurance: the hidden set has "real paraphrase groups" — grammar-only routing is the
   biggest single risk (public paraphrase consistency 1.0 uses gentle rewordings). The fallback must
   refuse digit-free when BM25 confidence is low (R1), never answer from a weak match.
-**S4.2 Deterministic caching & formatting** (canonical number formatting; memoise repeats)
-**S4.3 Warm-up at end of ingest** (first question is not the slowest question)
-- Done when: repeats/paraphrases identical; p95 < 200 ms locally.
+**S4.2 Deterministic caching & formatting — CLOSED BY EVIDENCE (2026-11-11, implementation deliberately skipped)**
+**S4.3 Warm-up at end of ingest — CLOSED BY EVIDENCE (2026-11-11, implementation deliberately skipped)**
+- Decision 8 (DECISIONS.md): answers are PURE functions of (parsed slots, view snapshot, index
+  version) — a cache cannot change an output, so memoization was designed and deliberately not
+  built. Both stories' Done-when criteria are nonetheless MET, measured 2026-11-11:
+  - repeats/paraphrases identical: S3.3 benchmark 78/78 same-claim (byte-identical for digit-free
+    answers) + S3.4 parse idempotence + route determinism; repeat answers byte-identical (0.7–3.3 ms).
+  - p95 < 200 ms locally: **p50 = 0.0 ms, p95 = 0.0 ms, max = 10 ms** across 45 eval samples
+    (public + selftest per-question latency).
+  - first question is NOT the slowest (S4.3): first question ever **2.5 ms**, first fallback query
+    5.5 ms — S4.1 builds the BM25 postings incrementally AT INGEST (the warm-up this story wanted),
+    and every other answer path is an in-memory ledger read.
+- Canonical number formatting already deterministic (R3): `fmt_rate` renders 2-decimal rates,
+  `label_term` renders month labels; identical claims render identically by construction.
+- If a future regression made answers slow or nondeterministic, the S3.3/S3.4 harnesses catch it.
 
 ### T5 — Conflicts productionized
 
@@ -641,6 +653,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S3.3 paraphrase self-benchmark | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | **78/78 = 100% same-claim** (gate ≥90%): 2 hand-reworded variants per gradable public item (78; dup-005 judge-only excluded), unmodified harness runner compares token multiset + confident per group; first run 79.5% → 16 failures = 16 real grammar gaps fixed (tier "balance is between", quantified "number of", "closure date"/"when is closing", "is the X branch open" weekday-guarded, TEMPERED named-branch capture — "the closure date for the Hy-Vee branch" was capturing the whole phrase as the branch name, "which page/where on your site" link asks, "top/the most", wallet names without "wallet", "can anyone join", "students" plural, "branch on <street>" → named-refusal); benchmark now doubles as the standing paraphrase regression harness; 278 tests (+17) |
 | S3.4 router determinism | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | invariant enforced at two layers: CI-safe pure-parser test (parse idempotence; all 39 groups route to ONE (family, mode); load-bearing slots agree — loans rate≡apr principled equivalence) + local benchmark strengthened (digit-free answers now compare BYTE-IDENTICAL text — token comparator was blind to URL-vs-prose route splits); 2 splits found & fixed (eligibility trigger hijacking "what's the LINK to become a member" — false-passed by the old comparator — now defers to join-link with both-way precedence guards; "every Dupaco branch" same-hours); **0 splits / 39 groups; 78/78 same-claim**; 287 tests (+9); T3 COMPLETE |
 | S4.1 BM25 fallback | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | pure-stdlib BM25 over cleaned sections (zero deps, R4); fires ONLY on total grammar misses — informed refusals never overridden; VIEW-scoped idf/df (trust view discipline); precision-first quote rule (number IN the unit + key idf-weighted terms + ≤280 chars, ask-verbs excluded, absent-term VETO against fabricated attribution — a hole the component tests caught); **kill-criterion fired in development** (heading-context let blog headings turn construction-loan refusals into confident wrong quotes — reverted, documented); fallback STAYS: benchmark 78/78 = 100% (gate ≥95%) with fallback active; value: fee-schedule rows now answered ("Stop payment … $30.00* per item", byte-identical repeats) while all should_refuse shapes still refuse; ingest 7.9 s (+1.7 s indexing), answer 3–6 ms; 304 tests (+16) |
+| S4.2/S4.3 caching & warm-up | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 (p95 0.0 ms) | — | **0.9481 public** / 0.83 selftest | CLOSED BY EVIDENCE, implementation deliberately skipped (Decision 8: answers are pure functions — a cache cannot change an output): repeats/paraphrases identical (S3.3 78/78 + S3.4 idempotence + repeat answers byte-identical); **p50/p95 = 0.0 ms, max 10 ms over 45 eval samples** (gate <200 ms); first question ever 2.5 ms (S4.1 warms the BM25 postings at ingest; all other paths are in-memory ledger reads); no code change |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |
