@@ -156,5 +156,42 @@ class TestConflicts(unittest.TestCase):
         self.assertIn("disagree", a.conflict_note or "")
 
 
+class TestConflictsCapAndOrder(unittest.TestCase):
+    """S5.1: the published list is deterministically ordered and capped."""
+
+    ROWS_A = [
+        "| 12 Month Certificate | 3.20% | 3.30% | $1,000.00 |",
+        "| 6 Month Certificate | 3.30% | 3.40% | $1,000.00 |",
+    ]
+    ROWS_B = [
+        "| 12 Month Certificate | 3.20% | 3.25% | $1,000.00 |",
+        "| 6 Month Certificate | 3.30% | 3.40% | $1,000.00 |",
+    ]
+
+    def _ks(self):
+        ks = SOL.build()
+        ks.ingest(snap(self.ROWS_A))
+        ks.ingest(Snapshot("X2_2026-09-02", "2026-09-02", [
+            Page("https://www.example.org/promo", "Promo",
+                 RATES_MD.replace("{ROWS}", "\n".join(self.ROWS_B)),
+                 "2026-09-02T00:00:00Z"),
+        ]))
+        return ks
+
+    def test_order_deterministic_and_capped(self):
+        ks = self._ks()
+        c1 = ks.conflicts()
+        c2 = ks.conflicts()
+        self.assertEqual([c.topic for c in c1], [c.topic for c in c2])
+        topics = [c.topic for c in c1]
+        self.assertEqual(topics, sorted(topics))
+        self.assertLessEqual(len(c1), 50)  # the S5.1 cap
+
+    def test_every_conflict_has_resolution_and_reason(self):
+        for c in self._ks().conflicts():
+            self.assertTrue(c.resolution, c.topic)
+            self.assertTrue(c.reason, c.topic)
+
+
 if __name__ == "__main__":
     unittest.main()

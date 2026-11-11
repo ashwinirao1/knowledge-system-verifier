@@ -100,7 +100,9 @@ def generate(store) -> list[Conflict]:
         claims = ledger.all_claims_snapshot(latest, family_product, family_metric)
         _scan_family(claims, conflicts, change_index)
     conflicts.sort(key=lambda c: (c.topic, c.values[0]))
-    return conflicts
+    # S5.1 cap: a pathological corpus must not flood the list — generous
+    # enough that real contradictions (27 on the real corpus) never clip
+    return conflicts[:50]
 
 
 # metric views scanned for same-key value disagreements in the current view

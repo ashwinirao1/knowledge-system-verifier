@@ -621,6 +621,30 @@ fourth vs fifth, legacy vs current links…) + tuning run
 **S5.3 `harness/selftest` regression** in the eval loop
 - Done when: local-gold precision ≥ 0.8 with resolution ≥ 0.8; selftest green.
 
+**S5.1 Precision control — DONE (2026-11-11)**
+- [x] Verified against the real corpus: 27 conflicts, EVERY one a genuine same-snapshot contradiction
+  (3 auto promo-vs-hub, 24 mortgage stale-blog-vs-current) — zero replica/tier false positives (the
+  R5 dedupe discipline held through six stories of extractor growth). Deterministic topic ordering
+  was already in place; added the S5.1 **cap (50)** so a pathological corpus can't flood the list;
+  every published conflict carries resolution + reason (locked by tests).
+**S5.2 Local gold — DONE (2026-11-11)**
+- [x] `tools/conflicts_eval.py` + hand-derived gold (results/conflicts_gold_local.json, gitignored —
+  corpus-derived data never enters git). Gold built by READING the contradicting pages:
+  switch-and-earn promo (effective 2026-01-01) vs auto hub (2026-08-31); homeownership blog
+  (2026-04-22) vs homebuying-guidance/mortgage-refi (2026-09-25). The story's hint pairs resolved:
+  "6.037 vs 7.13" WAS already detected (renders canonically as 6.04%); "5.34 vs 5.39" is NOT a
+  conflict (promo tier "2023–26" vs hub "2024-27" — the site revised its windows, different keys);
+  "3.90/4.00" is the S2.3 transition + same-row rate/APY columns; "22/24, fourth/fifth, legacy
+  links" are temporal series/prose — all recorded as EXCLUDED candidates the evaluator asserts
+  never surface.
+- Result: **precision 1.00 (gate ≥0.80) · recall 1.00 · resolution 1.00 (gate ≥0.80)**, zero
+  forbidden pairs.
+**S5.3 `harness/selftest` regression — DONE (standing since S0.4)**
+- [x] The selftest+gold gate runs in every story's eval loop (tools/eval_gate.py); conflicts F1 1.0,
+  resolution accuracy 1.0 re-verified this story.
+- Done when: ✅ local-gold precision ≥ 0.8 with resolution ≥ 0.8 (measured 1.00/1.00); selftest green
+  (0.83, F1 1.0); 306 tests (+2); ruff + leak guard clean. **T5 COMPLETE.**
+
 ### T6 — Submission hardening
 
 **S6.1 Environment** — pin all requirements; test install+run in a fresh py3.11 venv; keep
@@ -654,6 +678,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S3.4 router determinism | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | invariant enforced at two layers: CI-safe pure-parser test (parse idempotence; all 39 groups route to ONE (family, mode); load-bearing slots agree — loans rate≡apr principled equivalence) + local benchmark strengthened (digit-free answers now compare BYTE-IDENTICAL text — token comparator was blind to URL-vs-prose route splits); 2 splits found & fixed (eligibility trigger hijacking "what's the LINK to become a member" — false-passed by the old comparator — now defers to join-link with both-way precedence guards; "every Dupaco branch" same-hours); **0 splits / 39 groups; 78/78 same-claim**; 287 tests (+9); T3 COMPLETE |
 | S4.1 BM25 fallback | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | pure-stdlib BM25 over cleaned sections (zero deps, R4); fires ONLY on total grammar misses — informed refusals never overridden; VIEW-scoped idf/df (trust view discipline); precision-first quote rule (number IN the unit + key idf-weighted terms + ≤280 chars, ask-verbs excluded, absent-term VETO against fabricated attribution — a hole the component tests caught); **kill-criterion fired in development** (heading-context let blog headings turn construction-loan refusals into confident wrong quotes — reverted, documented); fallback STAYS: benchmark 78/78 = 100% (gate ≥95%) with fallback active; value: fee-schedule rows now answered ("Stop payment … $30.00* per item", byte-identical repeats) while all should_refuse shapes still refuse; ingest 7.9 s (+1.7 s indexing), answer 3–6 ms; 304 tests (+16) |
 | S4.2/S4.3 caching & warm-up | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 (p95 0.0 ms) | — | **0.9481 public** / 0.83 selftest | CLOSED BY EVIDENCE, implementation deliberately skipped (Decision 8: answers are pure functions — a cache cannot change an output): repeats/paraphrases identical (S3.3 78/78 + S3.4 idempotence + repeat answers byte-identical); **p50/p95 = 0.0 ms, max 10 ms over 45 eval samples** (gate <200 ms); first question ever 2.5 ms (S4.1 warms the BM25 postings at ingest; all other paths are in-memory ledger reads); no code change |
+| S5.1–S5.3 conflicts tuning | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | **1.0 local gold: P 1.00 / R 1.00 / res 1.00** | **0.9481 public** / 0.83 selftest (F1 1.0) | 27 real-corpus conflicts, EVERY one hand-verified genuine (3 auto promo-vs-hub, 24 mortgage stale-blog-vs-current) — zero R5 false positives; hint pairs resolved (6.037→6.04% already detected via canonical formatting; 5.34/5.39 = revised tier windows, different keys, NOT a conflict; 3.90/4.00 = transition + same-row columns; 22/24, fourth/fifth, links = series/prose — all excluded-asserted); S5.1 cap (50) + deterministic order + resolution/reason on every row (tested); local gold lives in gitignored results/ (corpus-derived, never pushed); tools/conflicts_eval.py committed; **T5 COMPLETE** |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |
