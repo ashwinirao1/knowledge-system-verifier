@@ -75,12 +75,34 @@ def _content_hash(product: str, metric: str, tier_dims: dict, value_text: str, e
     return hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()
 
 
+def _month_in_window(pt: tuple[int, int], lo: tuple | None, hi: tuple | None) -> bool:
+    """(year, month) point inside a (year|None, month)-bounded window."""
+    if lo is not None:
+        if lo[0] is not None:
+            if pt < (lo[0], lo[1]):
+                return False
+        elif pt[1] < lo[1]:
+            return False
+    if hi is not None:
+        if hi[0] is not None:
+            if pt > (hi[0], hi[1]):
+                return False
+        elif pt[1] > hi[1]:
+            return False
+    return True
+
+
 class CurrentTruth:
     """Reconciliation engine over the temporal claims ledger."""
 
     def __init__(self) -> None:
         self.ledger = ledger_mod.Ledger()
         self.pages_seen = 0
+        # S2.3 change events: transitions between snapshots, recorded at
+        # ingest (R2 — answer time is a filtered list read, never a diff).
+        self.transitions: list[dict] = []
+        self.change_index: dict[tuple, dict] = {}
+        self._prev_winners: dict | None = None
 
     # ------------------------------------------------------------------ contract
     def ingest(self, snapshot: Snapshot) -> None:
@@ -90,6 +112,42 @@ class CurrentTruth:
         self.ledger.add_snapshot(snap_id, snap_date)
         for page in snapshot.pages:
             self._ingest_page(page, snap_id, snap_date)
+        self._record_transitions(snap_id)
+
+    def _record_transitions(self, snap_id: str) -> None:
+        """Diff this snapshot's numeric winners against the previous snapshot's.
+
+        One entry per canonical key whose winning value changed: topic, old,
+        new, from/to snapshot dates. Numeric rate views only (the same family
+        views conflicts scans) — prose claims (hours, notices) legitimately
+        differ per page and are not value transitions. The winner per key is
+        the trust stack's choice within the snapshot, so a transition means
+        the member-visible answer actually moved.
+        """
+        current: dict = {}
+        for product, metric in conflicts_mod._FAMILY_VIEWS:
+            claims = [
+                c for c in self.ledger.all_claims_snapshot(snap_id, product, metric)
+                if c.value != 0.0
+            ]
+            current.update(trust_mod.pick_winners(claims))
+        prev = self._prev_winners
+        if prev:
+            for key, c in current.items():
+                p = prev.get(key)
+                if p is not None and p.value_text != c.value_text:
+                    t = {
+                        "key": key,
+                        "topic": conflicts_mod._topic_text(c),
+                        "old": p.value_text,
+                        "new": c.value_text,
+                        "from_date": p.snapshot_date,
+                        "to_date": c.snapshot_date,
+                        "claim": c,
+                    }
+                    self.transitions.append(t)
+                    self.change_index[key] = t
+        self._prev_winners = current
 
     def _ingest_page(self, page, snap_id: str, snap_date: str) -> None:
         self.pages_seen += 1
@@ -257,6 +315,8 @@ class CurrentTruth:
             return self._answer_branch(slots, snap_id, as_of_iso)
         if slots["family"] == "facts":
             return self._answer_facts(slots, snap_id, as_of_iso)
+        if slots["family"] == "changes":
+            return self._answer_changes(slots)
         claims = self.ledger.all_claims_snapshot(snap_id, PRODUCT, slots["metric"])
         # tier filter: exact dims we know, leave unspecified dims open
         kept = []
@@ -547,6 +607,31 @@ class CurrentTruth:
         winners = list(trust_mod.pick_winners(claims).values())
         mode = slots["mode"]
 
+        if mode in ("event_when", "event_status"):
+            # S2.3: dated branch events. Only a subject we hold an event for
+            # is answerable; an unknown branch refuses (digit-free, honest).
+            events = [c for c in winners if c.tier_dims.get("kind") == "branch_event"]
+            subj = slots.get("branch_subject") or ""
+            chosen = [c for c in events if subj and subj in (c.tier_dims.get("subject") or "")]
+            if not chosen:
+                text, _ = synth.refusal()
+                return Answer(text=text, sources=[], confident=False, conflict_note=None)
+            chosen.sort(key=lambda c: (c.tier_dims.get("event_date") or "", c.page_url))
+            ev = chosen[-1]  # the subject's latest event (deterministic)
+            snap_date = self.ledger.snapshot_dates()[snap_id]
+            past = (ev.tier_dims.get("event_date") or "") <= snap_date
+            label = ev.tier_dims.get("label") or "branch"
+            if mode == "event_when":
+                text = synth.branch_event_when(label, ev.value_text, past)
+            else:
+                text = synth.branch_event_status(label, ev.value_text, past)
+            return Answer(
+                text=text,
+                sources=[Source(url=ev.page_url, snapshot_id=snap_id, quote=ev.quote)],
+                confident=True,
+                conflict_note=None,
+            )
+
         if mode in ("hours_lobby", "hours_drive_up", "hours_same"):
             channel = "drive_up" if mode == "hours_drive_up" else "lobby"
             kept = [c for c in winners if c.tier_dims.get("kind") == "branch_hours"]
@@ -601,6 +686,44 @@ class CurrentTruth:
             confident=True,
             conflict_note=None,
         )
+
+    # ----------------------------------------------------------------- changes
+    def _answer_changes(self, slots: dict) -> Answer:
+        """S2.3: "what changed between May and September" — transitions that
+        ingest recorded, filtered by the parsed (year|None, month) window.
+        A None year means any year (month-only bound). Deterministic order
+        (topic, to_date, old)."""
+        rows = [
+            t for t in self.transitions
+            if _month_in_window((int(t["to_date"][:4]), int(t["to_date"][5:7])),
+                                slots.get("window_from"), slots.get("window_to"))
+        ]
+        # R5 replica discipline: the same economic move can sit under two
+        # canonical keys when pages label a tier differently ("$200,000" vs
+        # "$200000") or when business/personal rows moved identically — the
+        # member-visible change is ONE transition. Group on the normalized
+        # topic + old + new + to_date; keep the cleaner-rendered representative.
+        groups: dict[tuple, dict] = {}
+        for t in rows:
+            gk = (
+                re.sub(r"[^a-z0-9]+", "", t["topic"].lower()),
+                t["old"], t["new"], t["to_date"],
+            )
+            cur = groups.get(gk)
+            if cur is None or (t["topic"], t["old"]) < (cur["topic"], cur["old"]):
+                groups[gk] = t
+        rows = list(groups.values())
+        if not rows:
+            text, _ = synth.refusal()
+            return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        rows.sort(key=lambda t: (t["topic"], t["to_date"], t["old"]))
+        text = synth.changes_answer(rows, slots.get("label_from"), slots.get("label_to"))
+        sources = [
+            Source(url=t["claim"].page_url, snapshot_id=t["claim"].snapshot_id,
+                   quote=t["claim"].quote)
+            for t in rows[:4]
+        ]
+        return Answer(text=text, sources=sources, confident=True, conflict_note=None)
 
     # ----------------------------------------------------------------- facts
     def _answer_facts(self, slots: dict, snap_id: str, as_of_iso: str | None) -> Answer:

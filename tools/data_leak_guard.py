@@ -57,6 +57,11 @@ ALLOWED_CONTENT_FILES = {
     # host pattern. Fixtures are synthetic sentences; no corpus page text.
     "answers/tests/test_unit_facts.py",
     "answers/tests/test_component_facts_answers.py",
+    # S2.3 changes fixtures: synthetic certificate rate sheets across two
+    # snapshots whose table-level effective-date statement (MM/DD/YYYY form)
+    # is part of the transition rule under test; all dates/rates/URLs are
+    # synthetic (example.org) — no corpus page text.
+    "answers/tests/test_component_answer_path.py",
 }
 # path patterns that must never appear in git at all (outside harness/):
 FORBIDDEN_PATH_RE = re.compile(

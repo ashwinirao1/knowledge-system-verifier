@@ -85,6 +85,63 @@ def snap():
     ])
 
 
+# S2.3: the announcement shape WITH its date — "will close March 31, 2026."
+CLOSURE = """Dupaco has made the decision not to renew its lease at the branch
+inside the South Locust St. Hy-Vee store in Dubuque.
+
+This location will close March 31, 2026. All Dupaco Hy-Vee branch employees
+will remain with the credit union.
+
+Members who frequent the Hy-Vee branch already can access the same services at
+Dupaco full-service branches at Key West and Sycamore Street.
+"""
+
+
+def closure_snap(day):
+    return Snapshot(f"C_{day}", day, [
+        Page("https://www.example.org/news/closure", "Closure", CLOSURE, f"{day}T00:00:00Z"),
+    ])
+
+
+class TestBranchEvents(unittest.TestCase):
+    """S2.3: "when does X close" / "is X still open" answered from the dated
+    event claim — tense follows the view snapshot date; unknown subjects refuse
+    digit-free."""
+
+    def setUp(self):
+        self.ks = SOL.build()
+        self.ks.ingest(closure_snap("2026-09-28"))   # view AFTER the event
+
+    def test_when_close_names_the_published_date(self):
+        a = self.ks.answer("When does the Hy-Vee branch close?")
+        self.assertTrue(a.confident)
+        self.assertIn("March 31, 2026", a.text)
+        self.assertIn("closed", a.text)              # past tense after the date
+
+    def test_still_open_says_no_after_closure(self):
+        a = self.ks.answer("Is the Hy-Vee branch still open today (October 2026)?")
+        self.assertTrue(a.confident)
+        self.assertIn("No", a.text)
+        self.assertIn("March 31, 2026", a.text)
+
+    def test_future_view_says_will_close(self):
+        ks = SOL.build()
+        ks.ingest(closure_snap("2026-01-15"))        # view BEFORE the event
+        a = ks.answer("When does the Hy-Vee branch close?")
+        self.assertIn("will close", a.text)
+        self.assertIn("March 31, 2026", a.text)
+
+    def test_unknown_branch_refuses_digit_free(self):
+        a = self.ks.answer("Is the Key West branch still open today?")
+        self.assertFalse(a.confident)
+        self.assertNotRegex(a.text, r"\d")
+
+    def test_alternatives_still_work_on_same_page(self):
+        a = self.ks.answer("Where can Hy-Vee branch members bank instead?")
+        self.assertTrue(a.confident)
+        self.assertIn("Key West", a.text)
+
+
 class TestBranchAnswers(unittest.TestCase):
     def setUp(self):
         self.ks = SOL.build()

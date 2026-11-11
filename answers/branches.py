@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import re
 
+from trust import MONTHS
+
 _WEEKDAY = r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)"
 _DAY_GROUP_RE = re.compile(
     r"^\s*(?P<days>" + _WEEKDAY + r"(?:\s*[–—-]\s*" + _WEEKDAY + r")?"
@@ -189,10 +191,70 @@ def extract_branch_notices(text: str) -> list[dict]:
     return claims
 
 
+# S2.3 change events: dated branch events announced in prose. The corpus's
+# only event shape so far is a closure ("This location will close March 31,
+# 2026." on the newsroom announcement). Subjects are bound from page content
+# (the page must name the branch), never from URLs.
+_CLOSURE_RE = re.compile(
+    r"(?:location|branch|store)[^\n.]{0,120}?\b(?:will\s+)?clos(?:e|ing|ed)\s+"
+    r"(?P<mon>January|February|March|April|May|June|July|August|September|October|November|December)\s+"
+    r"(?P<day>\d{1,2}),?\s+(?P<yr>\d{4})",
+    re.I,
+)
+
+
+def _event_subject(text: str) -> tuple[str, str] | None:
+    """Canonical (subject, label) for a dated event page, or None if unknown."""
+    low = (text or "").lower()
+    if "hy-vee" in low or "hyvee" in low:
+        return "hyvee_locust", "Hy-Vee"
+    return None
+
+
+def extract_branch_events(text: str) -> list[dict]:
+    """Dated branch events (kind=branch_event): event, ISO date, published form.
+
+    value_text keeps the site's OWN rendering ("March 31, 2026") — event dates
+    are quoted to members exactly as published (R3), while event_date carries
+    the ISO form for temporal logic (past vs scheduled).
+    """
+    claims: list[dict] = []
+    bound = _event_subject(text)
+    if not bound:
+        return claims
+    subject, label = bound
+    seen: set[tuple] = set()
+    for m in _CLOSURE_RE.finditer(text or ""):
+        mon = MONTHS[m.group("mon").lower()]
+        day = int(m.group("day"))
+        yr = int(m.group("yr"))
+        iso = f"{yr:04d}-{mon:02d}-{day:02d}"
+        ck = (subject, "close", iso)
+        if ck in seen:
+            continue
+        seen.add(ck)
+        claims.append({
+            "tier_dims": {
+                "kind": "branch_event",
+                "subject": subject,
+                "label": label,
+                "event": "close",
+                "event_date": iso,
+            },
+            "value": 0.0,
+            "value_text": f"{m.group('mon')} {day}, {yr}",
+            "min_earn": None,
+            "quote": m.group(0)[:200],
+        })
+    return claims
+
+
 def extract_branches(text: str) -> list[dict]:
-    """Prose-statement branch claims for one page (hours + addresses + notices)."""
+    """Prose-statement branch claims for one page (hours + addresses + notices
+    + dated events)."""
     out: list[dict] = []
     out.extend(extract_branch_hours(text))
     out.extend(extract_branch_addresses(text))
     out.extend(extract_branch_notices(text))
+    out.extend(extract_branch_events(text))
     return out

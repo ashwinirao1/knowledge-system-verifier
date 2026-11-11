@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import re
 
+from trust import MONTH_ABBRS, MONTHS
+
 WORD_NUMBERS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
     "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
@@ -110,6 +112,33 @@ _DRIVE_UP_RE = re.compile(r"\bdrive[- ]?up\b|\bdrive.?thru\b|\bdrive.?through\b"
 _ADDRESS_TRIGGER_RE = re.compile(r"\baddress\b|\blocated\b|\bwhere is\b", re.I)
 _HYVEE_RE = re.compile(r"\bhy-?vee\b", re.I)
 _ALL_SAME_RE = re.compile(r"\ball\b.*\bsame\b|\bsame\b.*\ball\b|every branch", re.I)
+# S2.3 change events: "when does/did/will the X branch close" is an EVENT
+# question, not an hours question — it must win over the hours trigger, which
+# also matches "\bclos". Opening events are future scope (no corpus shape yet).
+_EVENT_WHEN_RE = re.compile(r"\bwhen\s+(?:does|did|will)\b", re.I)
+_EVENT_STILL_RE = re.compile(r"\bstill\s+open\b|\bhas\s+\S.+\bclosed\b|\bdid\s+\S.+\bclose\b", re.I)
+_EVENT_NAMED_RE = re.compile(r"\bthe\s+([a-z0-9'\- ]{3,40}?)\s+branch\b", re.I)
+
+
+def _norm_subject(name: str | None) -> str | None:
+    """'Hy-Vee' -> 'hyvee' — the token matched against a claim's subject key."""
+    if not name:
+        return None
+    s = re.sub(r"[^a-z0-9]+", "", name.lower())
+    return s or None
+
+
+def _event_slots(q: str, mode: str) -> dict:
+    named = None
+    m = _EVENT_NAMED_RE.search(q)
+    if m:
+        named = m.group(1).strip()
+    return {
+        "family": "branch",
+        "mode": mode,
+        "branch_subject": _norm_subject(named),
+        "branch_name": named,
+    }
 
 
 def _parse_branch(q: str) -> dict | None:
@@ -122,6 +151,10 @@ def _parse_branch(q: str) -> dict | None:
     )
     if m:
         named = (m.group(1) or m.group(2)).strip()
+    if _EVENT_WHEN_RE.search(q) and re.search(r"\bclos", q, re.I):
+        return _event_slots(q, "event_when")
+    if _EVENT_STILL_RE.search(q):
+        return _event_slots(q, "event_status")
     if _HOURS_TRIGGER_RE.search(q):
         mode = "hours_drive_up" if _DRIVE_UP_RE.search(q) else "hours_lobby"
         if _ALL_SAME_RE.search(q) and not _DRIVE_UP_RE.search(q):
@@ -141,6 +174,67 @@ def _parse_branch(q: str) -> dict | None:
             city = named
         return {"family": "branch", "mode": "address", "city": city}
     return None
+
+
+# ------------------------------------------------------- changes (S2.3)
+# "What changed between May and September?" / "What changed since June?" —
+# answered from the transition index recorded at ingest. Windows are
+# (year, month) points; year None = any year (deterministic, corpus-agnostic).
+_CHANGES_TRIGGER_RE = re.compile(
+    r"\bwhat\s+(?:has\s+)?changed\b|\banything\s+changed\b"
+    r"|\bwhat(?:'s| is)\s+new\b|\b(?:which|what)\s+rates?\s+(?:have\s+)?changed\b",
+    re.I,
+)
+_BETWEEN_RE = re.compile(
+    r"between\s+([a-z]+|\d{4}-\d{2})(?:\s+(\d{4}))?\s+and\s+([a-z]+|\d{4}-\d{2})(?:\s+(\d{4}))?",
+    re.I,
+)
+_SINCE_RE = re.compile(r"since\s+([a-z]+|\d{4}-\d{2})(?:\s+(\d{4}))?", re.I)
+
+
+def _month_point(tok: str, year: str | None) -> tuple[int | None, int] | None:
+    """'May'/'sep'/'2026-05' (+ optional explicit year) -> ((y|None), month)."""
+    t = tok.lower()
+    y: int | None = None
+    if re.match(r"^\d{4}-\d{2}$", t):
+        y, month = int(t[:4]), int(t[5:7])
+        if not 1 <= month <= 12:
+            return None
+    else:
+        month = MONTHS.get(t) or MONTH_ABBRS.get(t)
+        if not month:
+            return None
+    if year:
+        y = int(year)
+    return (y, month)
+
+
+def _parse_changes(q: str) -> dict | None:
+    if not _CHANGES_TRIGGER_RE.search(q):
+        return None
+    frm = to = None
+    label_from = label_to = None
+    m = _BETWEEN_RE.search(q)
+    if m:
+        frm = _month_point(m.group(1), m.group(2))
+        to = _month_point(m.group(3), m.group(4))
+        if frm:
+            label_from = m.group(1).capitalize() + (f" {m.group(2)}" if m.group(2) else "")
+        if to:
+            label_to = m.group(3).capitalize() + (f" {m.group(4)}" if m.group(4) else "")
+    else:
+        m = _SINCE_RE.search(q)
+        if m:
+            frm = _month_point(m.group(1), m.group(2))
+            if frm:
+                label_from = m.group(1).capitalize() + (f" {m.group(2)}" if m.group(2) else "")
+    if frm is None and to is None:
+        # a "what changed" question with no parsable window asks about the
+        # whole ledger history — the widest deterministic window
+        return {"family": "changes", "window_from": None, "window_to": None,
+                "label_from": None, "label_to": None}
+    return {"family": "changes", "window_from": frm, "window_to": to,
+            "label_from": label_from, "label_to": label_to}
 
 
 # ------------------------------------------------------------------ facts (S1.5)
@@ -246,6 +340,9 @@ def parse_question(question: str) -> dict | None:
     q = (question or "").lower().strip()
     if not q:
         return None
+    slots = _parse_changes(q)
+    if slots:
+        return slots
     slots = _parse_facts(q)
     if slots:
         return slots

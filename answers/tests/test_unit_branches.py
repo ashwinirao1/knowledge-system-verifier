@@ -108,5 +108,40 @@ class TestNotices(unittest.TestCase):
         self.assertEqual(B.extract_branch_notices("Nothing here."), [])
 
 
+class TestBranchEvents(unittest.TestCase):
+    """S2.3: dated branch events from prose — the closure announcement shape.
+    value_text keeps the site's own rendering ("March 31, 2026"); event_date
+    is the ISO form for temporal logic."""
+
+    ANNOUNCEMENT = (
+        "Dupaco has made the decision not to renew its lease at the branch "
+        "inside the South Locust St. Hy-Vee store in Dubuque.\n\n"
+        "This location will close March 31, 2026. All Dupaco Hy-Vee branch "
+        "employees will remain with the credit union.\n"
+    )
+
+    def test_closure_event_extracted(self):
+        evs = B.extract_branch_events(self.ANNOUNCEMENT)
+        self.assertEqual(len(evs), 1)
+        d = evs[0]["tier_dims"]
+        self.assertEqual(d["kind"], "branch_event")
+        self.assertEqual(d["subject"], "hyvee_locust")
+        self.assertEqual(d["event"], "close")
+        self.assertEqual(d["event_date"], "2026-03-31")
+        self.assertEqual(evs[0]["value_text"], "March 31, 2026")
+
+    def test_duplicate_statement_counts_once(self):
+        evs = B.extract_branch_events(self.ANNOUNCEMENT + self.ANNOUNCEMENT)
+        self.assertEqual(len(evs), 1)
+
+    def test_no_subject_no_event(self):
+        # a closure sentence with no recognizable branch on the page binds to
+        # nothing — we never invent a subject
+        self.assertEqual(B.extract_branch_events("This location will close March 31, 2026."), [])
+
+    def test_no_event_no_claims(self):
+        self.assertEqual(B.extract_branch_events("The Hy-Vee branch is open."), [])
+
+
 if __name__ == "__main__":
     unittest.main()

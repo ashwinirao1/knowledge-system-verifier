@@ -380,9 +380,41 @@ quality, security, data boundary — before any ledger row means anything.**
   unchanged; selftest 0.83 holds. Note: dup-074/075 (temporal_as_of, still 0.0) are CHANGE-EVENT
   questions (Hy-Vee closure "March 31, 2026") — S2.3 scope, not as_of machinery.
 
-**S2.3 Change events ("what changed")**
-- [ ] Attribute ledger events when a key's value changes between snapshots (3.90% → 4.00% example)
-- Done when: answerable "what changed between May and September" queries; conflicts can cite the transition.
+**S2.3 Change events ("what changed") — DONE (2026-11-10)**
+- [x] Attribute ledger events when a key's value changes between snapshots (3.90% → 4.00% example).
+  - Two deliverables in one story: (a) DATED EVENTS from prose — the Hy-Vee closure announcement
+    ("This location will close March 31, 2026.") is the only source for that closure; the locator
+    pages never list the branch, so there is no disappearance to diff — the announcement IS the
+    event. branches.py extract_branch_events() binds the subject from page CONTENT (hy-vee text
+    present), stores value_text in the site's own rendering ("March 31, 2026") for member-facing
+    fidelity and event_date ISO for tense logic. (b) TRANSITION INDEX — _record_transitions() at
+    the end of each ingest diffs the trust winners of numeric rate keys (the same family views
+    conflicts scans) against the previous snapshot; answer time is a filtered list read (R2).
+  - Question grammar: "when does/did/will X close" (event_when) and "is X still open"
+    (event_status) are checked BEFORE the hours trigger, which also matches "\bclos" and was
+    hijacking event questions into generic hours answers (the dup-074/075 failure). Hours
+    questions ("Is the branch closed on Sunday?") still route to hours. "What changed between
+    May and September / since June / (no window)" parses a (year|None, month) window — year
+    wildcard = any year, deterministic.
+  - Tense is a pure function of (event_date, view snapshot date): an as_of before 2026-03-31
+    says "will close", after says "closed" — the historical view stays truthful (verified by test).
+  - R5 replica discipline in the changes answer: the same economic move can sit under two keys
+    when pages label a tier differently ("$200,000" vs "$200000") or business/personal rows moved
+    identically — rows group on normalized topic + old + new + to_date, one representative shown.
+  - Conflicts cite the transition: when a same-view conflict's key also moved between snapshots,
+    the reason string gains "Previous value 3.90% until the 2026-09-28 snapshot." (the reason
+    field is the contract-safe channel — no contract dataclass touched; conflicts gold matches
+    on topic/values/correct_value only, so the gate is unaffected).
+  - Honest scoping: the corpus publishes no branch OPENING-with-date shape, so opening events are
+    future scope; "when is X open" stays an hours question (correct — that's a schedule ask).
+- Done when: ✅ "what changed between May and September" answers from the transition index
+  (10-Month jumbo special 3.90% → 4.00% verified on the real corpus); conflicts cite the
+  transition; dup-074 "When does the Hy-Vee branch close?" → "The Hy-Vee branch closed March 31,
+  2026." and dup-075 "still open today" → "No. The Hy-Vee branch closed March 31, 2026." — both
+  must_include tokens hit; unknown branches refuse digit-free. **Public eval 0.7465 → 0.8008**
+  (temporal_as_of 0.50 → 1.00, +0.0543, the largest single-story gain so far); selftest 0.83
+  holds; 221 tests (+22) on 3.9/3.11/3.14; leak guard allowlist entry added for the synthetic
+  changes fixture (same convention as every extractor-family file).
 
 **S2.4 Entity facts, counts & list families** (added 2026-11-10 from hidden-eval gap analysis —
 public failures: entity_attribution 0.25, conflict_resolution 0.33, dup-005 0.00)
@@ -452,6 +484,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S1.5 facts | 2026-11-10 | 0.7465 | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | dup-008/080/082/031/060/088/094 all 1.0 ✅ zero traps; ZERO regressions across the 33 prior items (7 gains: six 0.0→1.0 + dup-008 0.15→1.0); dup-088 = chronological series (294 in 2023; 256 in 2024 — eval expects 294 with a fresher 2025 post in every snapshot, so series replay, not fresher-wins); program binding refuses unknown names digit-free; facts excluded from conflicts (R5); ingest ~4 s (0.2% of budget, measured via tools/profile_ingest.py); 168 tests, ruff + leak guard clean |
 | S2.1 table dates | 2026-11-10 | 0.7465 (unchanged) | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | switch-and-earn page: 27→36 claims (+9 ATV rows recovered, +2 tables dated); 4 tables → 4 distinct effective dates across 3 statement phrasings ("Rates effective" variant added; comma headings; leading/descending "Model Year 2026-23" labels canonicalised ascending); stale promo copy loses to the 08/31/2026 rate page via the general stack — NO URL special-casing; zero regressions (no scored question touches the new claims); 180 tests |
 | S2.2 as_of edges | 2026-11-10 | 0.7465 (unchanged) | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | before-baseline as_of: refusal → EARLIEST snapshot + provenance note (confident, past tense); ISO range-validated ("2026-13-01" no longer a "date"); month names full+abbrev clamped to month end ("May 2026", "jun 2026"); all four edges unit-tested (19 new tests → 199); dup-006 edge re-verified end-to-end on the real corpus; dup-074/075 remain 0.0 = S2.3 change-events scope |
+| S2.3 change events | 2026-11-10 | **0.8008 (+0.0543)** | 1.0 | 1.0 | — | **0.8008 public** / 0.83 selftest | dup-074/075 fixed: event_when/event_status grammar checked BEFORE the hours trigger ("\bclos" was hijacking); Hy-Vee closure date extracted from the announcement (value_text = site's rendering "March 31, 2026"; ISO event_date for tense); tense = f(event_date, view date) so historical as_of says "will close"; transition index at ingest (winners diffed per numeric key) answers "what changed between May and September" (3.90→4.00 verified); R5 replica collapse in changes rows ($200,000 vs $200000 labels); conflicts reason cites "Previous value X until <snap>"; **temporal_as_of 0.50 → 1.00**; 221 tests (+22) |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

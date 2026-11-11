@@ -467,3 +467,30 @@ def branch_hyvee_alternatives(claims: list[Claim], present_tense: bool = True) -
     return (f"Members can access the same full-service banking at the "
             f"{alts} branches.")
 
+
+# ------------------------------------------------------- change events (S2.3)
+# Event answers quote the date EXACTLY as published (claim.value_text, e.g.
+# "March 31, 2026") — R3 determinism and member-facing fidelity in one move.
+# Tense is a pure function of (event_date, view snapshot date), so the same
+# question under an as_of before the event says "will close", after it says
+# "closed" — the historical view stays truthful without extra machinery.
+
+def branch_event_when(label: str, date_text: str, past: bool) -> str:
+    verb = "closed" if past else "will close"
+    return f"The {label} branch {verb} {date_text}."
+
+
+def branch_event_status(label: str, date_text: str, past: bool) -> str:
+    if past:
+        return f"No. The {label} branch closed {date_text}."
+    return f"Yes. The {label} branch is open; its closure is scheduled for {date_text}."
+
+
+def changes_answer(rows: list[dict], label_from: str | None, label_to: str | None) -> str:
+    """Rows pre-sorted by (topic, to_date) — one part per transition, joined
+    with '; '. Each part states only that transition's old and new value (R1)."""
+    lo = label_from or "the earlier snapshots"
+    hi = label_to or "now"
+    parts = [f"{r['topic']} changed from {r['old']} to {r['new']}" for r in rows]
+    return f"Between {lo} and {hi}: " + "; ".join(parts) + "."
+

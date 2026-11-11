@@ -94,10 +94,11 @@ def generate(store) -> list[Conflict]:
     if not snap_dates:
         return []
     latest = snapshot_id_as_of(snap_dates, None)
+    change_index = getattr(store, "change_index", None) or {}
     conflicts: list[Conflict] = []
     for family_product, family_metric in _FAMILY_VIEWS:
         claims = ledger.all_claims_snapshot(latest, family_product, family_metric)
-        _scan_family(claims, conflicts)
+        _scan_family(claims, conflicts, change_index)
     conflicts.sort(key=lambda c: (c.topic, c.values[0]))
     return conflicts
 
@@ -113,7 +114,7 @@ _FAMILY_VIEWS = (
 )
 
 
-def _scan_family(claims: list, conflicts: list) -> None:
+def _scan_family(claims: list, conflicts: list, change_index: dict | None = None) -> None:
     from trust import pick_winners  # local sibling cycle-avoidance
 
     # group rows by canonical key preserving deterministic iteration order
@@ -135,12 +136,20 @@ def _scan_family(claims: list, conflicts: list) -> None:
         values = [winner.value_text] + [
             v for v in sorted(texts, key=_value_num, reverse=True) if v != winner.value_text
         ]
+        # S2.3: when the same key ALSO moved between snapshots, cite the
+        # transition — the disagreement the site shows now has a history, and
+        # the reason string is the contract-safe place to carry it.
+        reason = _reason(winner, loser)
+        if change_index:
+            t = change_index.get(key)
+            if t:
+                reason += f" Previous value {t['old']} until the {t['to_date']} snapshot."
         conflicts.append(Conflict(
             topic=_topic_text(winner),
             values=values,
             sources=sources,
             resolution=winner.value_text,
-            reason=_reason(winner, loser),
+            reason=reason,
         ))
     conflicts.sort(key=lambda c: (c.topic, c.values[0]))
     return conflicts

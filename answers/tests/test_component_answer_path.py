@@ -157,5 +157,69 @@ class TestAsOfEdges(unittest.TestCase):
         self.assertIsNone(a.conflict_note)
 
 
+class TestChanges(unittest.TestCase):
+    """S2.3: "what changed between May and September" — transitions recorded
+    at ingest, window-filtered, replicas collapsed to one row; an empty window
+    refuses digit-free."""
+
+    OLD_MD = (
+        "Certificates\n\nSpecial Certificates\n\n"
+        "| Certificate | Dividend Rate | Annual Percentage Yield (APY) | Min. to Earn |\n"
+        "| --- | --- | --- | --- |\n"
+        "| 10 Month Fixed Jumbo Certificate Special | 3.86% | 3.90%1 | $100,000 |\n\n"
+        "Rates are effective as of 05/01/2026 and are subject to change without notice.\n"
+    )
+    NEW_MD = (
+        "Certificates\n\nSpecial Certificates\n\n"
+        "| Certificate | Dividend Rate | Annual Percentage Yield (APY) | Min. to Earn |\n"
+        "| --- | --- | --- | --- |\n"
+        "| 10 Month Fixed Jumbo Certificate Special | 3.96% | 4.00%1 | $100,000.00 |\n\n"
+        "Rates are effective as of 09/01/2026 and are subject to change without notice.\n"
+    )
+
+    def _ks(self):
+        ks = SOL.build()
+        ks.ingest(Snapshot("M_2026-05-12", "2026-05-12", [
+            Page("https://www.example.org/savings", "Savings", self.OLD_MD, "2026-05-12T00:00:00Z"),
+        ]))
+        ks.ingest(Snapshot("M_2026-09-28", "2026-09-28", [
+            Page("https://www.example.org/savings", "Savings", self.NEW_MD, "2026-09-28T00:00:00Z"),
+        ]))
+        return ks
+
+    def test_transition_recorded_at_ingest(self):
+        ks = self._ks()
+        self.assertEqual(len(ks.transitions), 1)
+        t = ks.transitions[0]
+        self.assertEqual(t["old"], "3.90%")
+        self.assertEqual(t["new"], "4.00%")
+        self.assertEqual(t["from_date"], "2026-05-12")
+        self.assertEqual(t["to_date"], "2026-09-28")
+
+    def test_what_changed_between(self):
+        a = self._ks().answer("What changed between May and September?")
+        self.assertTrue(a.confident)
+        self.assertIn("3.90%", a.text)
+        self.assertIn("4.00%", a.text)
+        self.assertTrue(a.sources)
+
+    def test_empty_window_refuses_digit_free(self):
+        a = self._ks().answer("What changed between June and July?")
+        self.assertFalse(a.confident)
+        self.assertNotRegex(a.text, r"\d")
+
+    def test_identical_snapshots_no_transitions(self):
+        ks = SOL.build()
+        ks.ingest(Snapshot("M_2026-05-12", "2026-05-12", [
+            Page("https://www.example.org/savings", "Savings", self.OLD_MD, "2026-05-12T00:00:00Z"),
+        ]))
+        ks.ingest(Snapshot("M_2026-05-19", "2026-05-19", [
+            Page("https://www.example.org/savings", "Savings", self.OLD_MD, "2026-05-19T00:00:00Z"),
+        ]))
+        self.assertEqual(ks.transitions, [])
+        a = ks.answer("What changed between May and September?")
+        self.assertFalse(a.confident)
+
+
 if __name__ == "__main__":
     unittest.main()

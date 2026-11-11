@@ -63,6 +63,30 @@ class TestConflicts(unittest.TestCase):
         self.assertIn("3.70%", c.values)
         self.assertIn("freshest", c.reason.lower())
 
+    def test_conflict_reason_cites_the_transition(self):
+        """S2.3: a key that ALSO moved between snapshots cites its history —
+        previous value + the snapshot it held until — in the reason string."""
+        old_rates = RATES_MD.replace("{ROWS}", "| 17 Month Fixed Certificate Special | 4.06% | 4.10%2 | $1,000 |")
+        new_rates = RATES_MD.replace("{ROWS}", "| 17 Month Fixed Certificate Special | 4.06% | 4.20%2 | $1,000 |")
+        promo = (
+            "| Certificate | Dividend Rate | Annual Percentage Yield (APY) | Min. to Earn |\n"
+            "| --- | --- | --- | --- |\n"
+            "| 17 Month Fixed Certificate Special | 4.06% | 3.70%2 | $1,000 |\n"
+        )
+        ks = self._make([
+            Snapshot("X_2026-05-01", "2026-05-01", [
+                Page("https://www.example.org/rates", "Rates", old_rates, "2026-05-01T00:00:00Z"),
+            ]),
+            Snapshot("X_2026-09-01", "2026-09-01", [
+                Page("https://www.example.org/rates", "Rates", new_rates, "2026-09-01T00:00:00Z"),
+                Page("https://www.example.org/promo/summer-special", "Summer Special", promo, "2026-09-01T00:00:00Z"),
+            ]),
+        ])
+        conf = ks.conflicts()
+        self.assertEqual(len(conf), 1)
+        self.assertIn("Previous value 4.10%", conf[0].reason)
+        self.assertIn("2026-09-01", conf[0].reason)
+
     def test_replicas_same_value_no_conflict(self):
         ks = self._make([snap(["| 17 Month Fixed Certificate Special | 4.06% | 4.10%2 | $1,000 |"])])
         self.assertEqual(ks.conflicts(), [])
