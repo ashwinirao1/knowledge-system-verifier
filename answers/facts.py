@@ -28,10 +28,22 @@ carries the fact):
 Extraction is label- and sentence-driven; nothing is keyed to a question.
 These families stay OUT of the conflicts views — programs, services, wallets
 and links legitimately differ page to page, which is not a contradiction (R5).
+
+Entity facts (S2.4) — the "who/what is Dupaco" class, extracted from prose:
+routing number, branch-count boilerplate, Forbes recognition ordinal,
+membership eligibility, student-loan product facts. Newsroom/blog statements
+are bitemporal: the ARTICLE's publish date is the value-date (effective_date),
+so "23 branch office locations" (March 2026) legitimately loses to "22"
+(April 2026, after the Hy-Vee branch closed March 31) by the standard trust
+stack — freshest effective date wins, no special-casing. These stay out of
+the conflicts views too: boilerplate updated over time is a temporal series,
+not a same-snapshot contradiction (R5).
 """
 from __future__ import annotations
 
 import re
+
+from trust import MONTHS
 
 _ANCHOR_RE = re.compile(
     r"[ \t]*\[(?P<label>[^\]\n]{1,140})\]\((?P<url>https?://[^)\s]+)\)"
@@ -295,6 +307,106 @@ def extract_annual_series(text: str) -> list[dict]:
     return claims
 
 
+# ------------------------------------------------------- entity facts (S2.4)
+_MONTH_LINE_RE = re.compile(
+    r"(January|February|March|April|May|June|July|August|September|October|"
+    r"November|December) (\d{1,2}), (\d{4})"
+)
+_ORDINALS = ("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+             "eighth", "ninth", "tenth")
+_ROUTING_RE = re.compile(r"(?:routing(?:\s+number)?|ABA(?:\s+number)?)[^\n.]{0,60}?\(?(\d{9})\)?", re.I)
+_BRANCH_COUNT_RE = re.compile(r"\b(\d{2,3}) branch office locations\b", re.I)
+_FORBES_RE = re.compile(
+    r"(?:This|It) was the (" + "|".join(_ORDINALS) + r") time Forbes recognized", re.I
+)
+_CHARTER_RULE_RE = re.compile(
+    r"[Yy]ou live or work within our \[?charter area\]?(?:\([^)]*\))?"
+)
+_STATES_RE = re.compile(
+    r"find us in (?P<states>[A-Z][A-Za-z]*(?:, [A-Z][A-Za-z]*)* and [A-Z][A-Za-z]*)"
+)
+
+
+def _publish_date(text: str) -> str | None:
+    """The article's own publish date ("June 18, 2024" under the byline) as an
+    ISO value-date — the bitemporal anchor for newsroom/blog entity facts."""
+    m = _MONTH_LINE_RE.search((text or "")[:3000])
+    if not m:
+        return None
+    mon = MONTHS[m.group(1).lower()]
+    return f"{int(m.group(3)):04d}-{mon:02d}-{int(m.group(2)):02d}"
+
+
+def _entity_claim(entity: str, value_text: str, effective_date: str | None,
+                  quote: str, **extra_dims) -> dict:
+    return {
+        "tier_dims": {"kind": "entity_fact", "entity": entity, **extra_dims},
+        "value": 0.0,
+        "value_text": value_text,
+        "min_earn": None,
+        "effective_date": effective_date,
+        "quote": quote[:200],
+    }
+
+
+def extract_entity_facts(text: str) -> list[dict]:
+    """Routing number, branch count, Forbes ordinal, membership eligibility,
+    student-loan product facts. Each fact binds to the page's own publish date
+    when the page carries one (bitemporal: publish date = value-date)."""
+    claims: list[dict] = []
+    t = text or ""
+    low = t.lower()
+    if not low:
+        return claims
+    pub = _publish_date(t)
+
+    if "routing number" in low or "aba number" in low:
+        m = _ROUTING_RE.search(t)
+        if m:
+            claims.append(_entity_claim(
+                "routing_number", m.group(1), None,
+                m.group(0),
+            ))
+
+    if "branch office locations" in low:
+        m = _BRANCH_COUNT_RE.search(t)
+        if m:
+            claims.append(_entity_claim(
+                "branch_count", m.group(1), pub,
+                m.group(0),
+            ))
+
+    if "time forbes recognized" in low:
+        m = _FORBES_RE.search(t)
+        if m:
+            claims.append(_entity_claim(
+                "forbes_recognition", m.group(1).lower(), pub,
+                m.group(0),
+            ))
+
+    if _CHARTER_RULE_RE.search(t):
+        m = _STATES_RE.search(t)
+        states = m.group("states") if m else None
+        q = _CHARTER_RULE_RE.search(t)
+        claims.append(_entity_claim(
+            "membership_eligibility",
+            "live or work within our charter area", pub,
+            q.group(0) if q else "charter area",
+            states=states or "",
+        ))
+
+    if "origination fees" in low and "student loan" in low:
+        claims.append(_entity_claim(
+            "student_loan",
+            "new student loan or refinance existing ones, with flexible "
+            "repayment and $0 origination fees",
+            pub,
+            "student loan origination fees",
+        ))
+
+    return claims
+
+
 def extract_facts(text: str) -> list[dict]:
     """All prose-fact claims for one page (S1.5). Cheap gates first: most
     pages carry none of this, so each extractor is short-circuited."""
@@ -314,4 +426,12 @@ def extract_facts(text: str) -> list[dict]:
         out.extend(extract_wallets(text))
     if "alone:" in low:
         out.extend(extract_annual_series(text))
+    if (
+        "routing number" in low or "aba number" in low
+        or "branch office locations" in low
+        or "time forbes recognized" in low
+        or "charter area" in low
+        or ("origination fees" in low and "student loan" in low)
+    ):
+        out.extend(extract_entity_facts(text))
     return out

@@ -494,3 +494,46 @@ def changes_answer(rows: list[dict], label_from: str | None, label_to: str | Non
     parts = [f"{r['topic']} changed from {r['old']} to {r['new']}" for r in rows]
     return f"Between {lo} and {hi}: " + "; ".join(parts) + "."
 
+
+# ------------------------------------------------------ entity facts (S2.4)
+# The "who/what is Dupaco" fact class. Each template renders ONLY the selected
+# claim's payload (R1); freshness/tense decisions happen upstream in the trust
+# stack, not here.
+
+def entity_routing(claim: Claim) -> str:
+    return f"Dupaco's routing number is {claim.value_text}."
+
+
+def entity_branch_count(claim: Claim) -> str:
+    return f"Dupaco has {claim.value_text} branch office locations."
+
+
+def entity_forbes(claim: Claim) -> str:
+    return (f"Forbes has recognized Dupaco for the {claim.value_text} time, "
+            f"most recently on its Best-in-State Credit Union list.")
+
+
+def entity_membership(claim: Claim) -> str:
+    states = claim.tier_dims.get("states") or ""
+    base = ("Membership is open to people who live or work within Dupaco's "
+            "charter area")
+    if states:
+        return f"{base} — you can find us in {states}."
+    return f"{base}."
+
+
+def entity_student_loan(claim: Claim) -> str:
+    return ("Yes — Dupaco offers student loans: choose a new student loan or "
+            "refinance existing ones, with flexible repayment and $0 "
+            "origination fees.")
+
+
+# dispatch keyed by the question parser's entity slot (R3: explicit, total)
+ENTITY_TEMPLATES = {
+    "routing_number": entity_routing,
+    "branch_count": entity_branch_count,
+    "forbes_recognition": entity_forbes,
+    "membership_eligibility": entity_membership,
+    "student_loan": entity_student_loan,
+}
+

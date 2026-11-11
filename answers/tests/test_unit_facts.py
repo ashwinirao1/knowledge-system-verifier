@@ -174,5 +174,91 @@ class TestGates(unittest.TestCase):
         self.assertEqual(F.extract_facts("A plain product page about savings rates."), [])
 
 
+class TestEntityFacts(unittest.TestCase):
+    """S2.4: the "who/what is Dupaco" fact class — routing number, branch
+    count, Forbes ordinal, membership eligibility, student-loan product facts.
+    Newsroom facts carry the article's publish date as their effective_date
+    (bitemporal value-date)."""
+
+    ROUTING_MD = (
+        "Ask your employer if they offer direct deposit. You'll need Dupaco's "
+        "routing number (273974581) and your checking account number."
+    )
+
+    COUNT_OLD_MD = (
+        "March 10, 2026\n\nSome article body.\n\nABOUT DUPACO: It has over "
+        "600 employees and 23 branch office locations."
+    )
+    COUNT_NEW_MD = (
+        "April 23, 2026\n\nSome article body.\n\nABOUT DUPACO: It has over "
+        "600 employees and 22 branch office locations."
+    )
+    COUNT_NODATE_MD = "It has over 600 employees and 23 branch office locations."
+
+    FORBES_OLD_MD = (
+        "July 18, 2023\n\nNational business magazine Forbes again named "
+        "Dupaco one of the top-rated credit unions in America. It was the "
+        "fourth time Forbes recognized Dupaco."
+    )
+    FORBES_NEW_MD = (
+        "June 18, 2024\n\nNational business magazine Forbes again named "
+        "Dupaco one of the top-rated credit unions in America. This was the "
+        "fifth time Forbes recognized Dupaco."
+    )
+
+    JOIN_ELIG_MD = (
+        "You can find us in Iowa, Illinois and Wisconsin. And if you're "
+        "road-tripping, you can also access your money at shared branches.\n\n"
+        "You're Eligible to Join If Any of These Sound Like You\n\n"
+        "- You live or work within our [charter area](https://maps.example.org/area.jpg).\n"
+    )
+
+    STUDENT_MD = (
+        "Student Loans & Refinancing\n\nWhether you need to fill the funding "
+        "gap for college, we have flexible options to help.\n\n#### Flexible "
+        "Repayment\n\nDefer full payments while in school.\n\n#### Keep More "
+        "Money\n\nBenefit from $0 origination fees, no prepayment penalties, "
+        "and favorable rates."
+    )
+
+    def test_routing_number(self):
+        claims = F.extract_entity_facts(self.ROUTING_MD)
+        self.assertEqual(len(claims), 1)
+        self.assertEqual(claims[0]["tier_dims"]["entity"], "routing_number")
+        self.assertEqual(claims[0]["value_text"], "273974581")
+
+    def test_branch_count_carries_publish_date(self):
+        claims = F.extract_entity_facts(self.COUNT_NEW_MD)
+        self.assertEqual(claims[0]["tier_dims"]["entity"], "branch_count")
+        self.assertEqual(claims[0]["value_text"], "22")
+        self.assertEqual(claims[0]["effective_date"], "2026-04-23")
+
+    def test_branch_count_without_date_has_none(self):
+        claims = F.extract_entity_facts(self.COUNT_NODATE_MD)
+        self.assertEqual(claims[0]["value_text"], "23")
+        self.assertIsNone(claims[0]["effective_date"])
+
+    def test_forbes_ordinal(self):
+        claims = F.extract_entity_facts(self.FORBES_NEW_MD)
+        self.assertEqual(claims[0]["tier_dims"]["entity"], "forbes_recognition")
+        self.assertEqual(claims[0]["value_text"], "fifth")
+        self.assertEqual(claims[0]["effective_date"], "2024-06-18")
+
+    def test_eligibility_with_link_markup(self):
+        claims = F.extract_entity_facts(self.JOIN_ELIG_MD)
+        self.assertEqual(claims[0]["tier_dims"]["entity"], "membership_eligibility")
+        self.assertEqual(claims[0]["tier_dims"]["states"], "Iowa, Illinois and Wisconsin")
+
+    def test_student_loan_product_fact(self):
+        claims = F.extract_entity_facts(self.STUDENT_MD)
+        self.assertEqual(claims[0]["tier_dims"]["entity"], "student_loan")
+        self.assertIn("student loan", claims[0]["value_text"])
+
+    def test_negatives(self):
+        self.assertEqual(F.extract_entity_facts("The Hy-Vee branch will close March 31, 2026."), [])
+        self.assertEqual(F.extract_entity_facts("Forbes is a magazine."), [])
+        self.assertEqual(F.extract_entity_facts("Loans are subject to approval."), [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -111,5 +111,39 @@ class TestChangeEventGrammar(unittest.TestCase):
         self.assertIsNone(Q.parse_question("What is the capital of France?") or None)
 
 
+class TestEntityGrammar(unittest.TestCase):
+    """S2.4: entity-fact question grammar."""
+
+    def test_how_many_branches(self):
+        s = Q.parse_question("How many branches does Dupaco have?")
+        self.assertEqual(s["family"], "facts")
+        self.assertEqual(s["mode"], "entity")
+        self.assertEqual(s["entity"], "branch_count")
+
+    def test_routing_number_direct_and_replay(self):
+        for q in ("What is Dupaco's routing number?",
+                  "Can you repeat the routing number?"):
+            s = Q.parse_question(q)
+            self.assertEqual(s["entity"], "routing_number", q)
+
+    def test_forbes(self):
+        s = Q.parse_question("What recognition has Dupaco received from Forbes?")
+        self.assertEqual(s["entity"], "forbes_recognition")
+
+    def test_eligibility_beats_join_link(self):
+        # "who is eligible ... become a member" asks for the RULE, not the URL
+        s = Q.parse_question("Who is eligible to become a Dupaco member?")
+        self.assertEqual(s["mode"], "entity")
+        self.assertEqual(s["entity"], "membership_eligibility")
+
+    def test_student_loan_non_adjacent(self):
+        s = Q.parse_question("I'm a student going to a new university - do you have any loan options with flexibility?")
+        self.assertEqual(s["entity"], "student_loan")
+
+    def test_vto_series_still_wins_over_branch_count(self):
+        s = Q.parse_question("How many employees used VTO last year?")
+        self.assertEqual(s["mode"], "series")
+
+
 if __name__ == "__main__":
     unittest.main()

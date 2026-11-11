@@ -263,8 +263,9 @@ _FACTS_YEAR_RE = re.compile(r"\bin (20\d\d)\b", re.I)
 
 def _parse_facts(q: str) -> dict | None:
     """Facts family (S1.5): wallet support, annual series, services, programs,
-    links. Runs BEFORE the product families so wording like "cards to a mobile
-    wallet" or "CD rates link" never lands in the APR paths."""
+    links, entity facts (S2.4). Runs BEFORE the product families so wording
+    like "cards to a mobile wallet" or "CD rates link" never lands in the APR
+    paths."""
     if _FACTS_WALLET_RE.search(q) and (_FACTS_PAY_RE.search(q) or "card" in q):
         return {"family": "facts", "mode": "wallet"}
     if re.search(r"how many\b", q) and re.search(r"volunteer|VTO", q, re.I):
@@ -272,6 +273,25 @@ def _parse_facts(q: str) -> dict | None:
         m = _FACTS_YEAR_RE.search(q)
         return {"family": "facts", "mode": "series", "series": series,
                 "year": int(m.group(1)) if m else None}
+    if re.search(r"how many\b", q) and re.search(r"branch(?:es)?\b|branch office", q, re.I):
+        # published-count semantics: the freshest published statement of the
+        # count, never a naive count of ledger rows (R5 replica discipline)
+        return {"family": "facts", "mode": "entity", "entity": "branch_count"}
+    if re.search(r"routing(?:\s+number)?|aba number", q, re.I):
+        # "Can you repeat the routing number?" contains the noun phrase —
+        # replay questions need no separate anaphora rule
+        return {"family": "facts", "mode": "entity", "entity": "routing_number"}
+    if re.search(r"\bforbes\b", q, re.I):
+        return {"family": "facts", "mode": "entity", "entity": "forbes_recognition"}
+    if re.search(r"who (?:is|'s|can)\b.*\b(?:eligible|join|become)|eligib\w* to (?:become|join)"
+                 r"|become a (?:dupaco )?member|membership eligib", q, re.I):
+        # eligibility must precede the join-LINK binding below — both match
+        # "become a member", but "who is eligible" asks for the RULE, not the URL
+        return {"family": "facts", "mode": "entity", "entity": "membership_eligibility"}
+    if re.search(r"\bstudent\b", q, re.I) and re.search(r"\bloan", q, re.I):
+        # "I'm a student ... any loan options?" — student and loan need not be
+        # adjacent ("student loan" alone would miss dup-101's phrasing)
+        return {"family": "facts", "mode": "entity", "entity": "student_loan"}
     if _FACTS_UPDATE_RE.search(q):
         return {"family": "facts", "mode": "update_contact"}
     if _FACTS_PROGRAM_RE.search(q):

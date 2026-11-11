@@ -126,6 +126,113 @@ class TestFactsAnswers(unittest.TestCase):
         self.assertFalse(re.search(r"\d", a.text), a.text)
 
 
+class TestEntityFactAnswers(unittest.TestCase):
+    """S2.4: the "who/what is Dupaco" fact class end-to-end. The count and
+    Forbes answers resolve via the trust stack on publish dates — freshest
+    published statement wins, no special-casing."""
+
+    COUNT_MARCH_MD = (
+        "March 10, 2026\n\nSome article body about financial stress.\n\n"
+        "ABOUT DUPACO: It has over 600 employees and 23 branch office locations."
+    )
+    COUNT_APRIL_MD = (
+        "April 23, 2026\n\nSome article body about homebuying.\n\n"
+        "ABOUT DUPACO: It has over 600 employees and 22 branch office locations."
+    )
+    FORBES_2023_MD = (
+        "July 18, 2023\n\nNational business magazine Forbes again named "
+        "Dupaco one of the top-rated credit unions in America. It was the "
+        "fourth time Forbes recognized Dupaco."
+    )
+    FORBES_2024_MD = (
+        "June 18, 2024\n\nNational business magazine Forbes again named "
+        "Dupaco one of the top-rated credit unions in America. This was the "
+        "fifth time Forbes recognized Dupaco."
+    )
+    ROUTING_MD = (
+        "You'll need Dupaco's routing number (273974581) and your checking "
+        "account number to set up direct deposit."
+    )
+    ELIG_MD = (
+        "You can find us in Iowa, Illinois and Wisconsin. And if you're "
+        "road-tripping, you can also access your money at shared branches.\n\n"
+        "You're Eligible to Join If Any of These Sound Like You\n\n"
+        "- You live or work within our [charter area](https://maps.example.org/area.jpg).\n"
+    )
+    STUDENT_MD = (
+        "Student Loans & Refinancing\n\nWhether you need to fill the funding "
+        "gap for college, we have flexible options to help.\n\n#### Flexible "
+        "Repayment\n\nDefer full payments while in school.\n\n#### Keep More "
+        "Money\n\nBenefit from $0 origination fees, no prepayment penalties, "
+        "and favorable rates."
+    )
+
+    def _ks(self):
+        ks = SOL.build()
+        ks.ingest(Snapshot("E_2026-09-28", "2026-09-28", [
+            Page("https://www.dupaco-int-test.org/newsroom/march", "March",
+                 self.COUNT_MARCH_MD, "2026-09-28T00:00:00Z"),
+            Page("https://www.dupaco-int-test.org/newsroom/april", "April",
+                 self.COUNT_APRIL_MD, "2026-09-28T00:00:00Z"),
+            Page("https://www.dupaco-int-test.org/newsroom/forbes-2023", "Forbes 2023",
+                 self.FORBES_2023_MD, "2026-09-28T00:00:00Z"),
+            Page("https://www.dupaco-int-test.org/newsroom/forbes-2024", "Forbes 2024",
+                 self.FORBES_2024_MD, "2026-09-28T00:00:00Z"),
+            Page("https://www.dupaco-int-test.org/checking", "Checking",
+                 self.ROUTING_MD, "2026-09-28T00:00:00Z"),
+            Page("https://www.dupaco-int-test.org/about/join", "Join",
+                 self.ELIG_MD, "2026-09-28T00:00:00Z"),
+            Page("https://www.dupaco-int-test.org/student-loans", "Student loans",
+                 self.STUDENT_MD, "2026-09-28T00:00:00Z"),
+        ]))
+        return ks
+
+    def test_routing_number(self):
+        a = self._ks().answer("What is Dupaco's routing number?")
+        self.assertTrue(a.confident)
+        self.assertIn("273974581", a.text)
+
+    def test_routing_number_replay(self):
+        a = self._ks().answer("Can you repeat the routing number?")
+        self.assertTrue(a.confident)
+        self.assertIn("273974581", a.text)
+
+    def test_branch_count_freshest_publish_date_wins(self):
+        # the 22-vs-23 dup-073 shape: two boilerplate statements, the April one
+        # is fresher (the Hy-Vee branch closed March 31 in the real corpus)
+        a = self._ks().answer("How many branches does Dupaco have?")
+        self.assertTrue(a.confident)
+        self.assertIn("22", a.text)
+        self.assertNotIn("23", a.text)
+
+    def test_forbes_freshest_ordinal_wins(self):
+        a = self._ks().answer("What recognition has Dupaco received from Forbes?")
+        self.assertTrue(a.confident)
+        self.assertIn("fifth", a.text)
+        self.assertNotIn("fourth", a.text)
+
+    def test_membership_eligibility_states(self):
+        a = self._ks().answer("Who is eligible to become a Dupaco member?")
+        self.assertTrue(a.confident)
+        for st in ("Iowa", "Illinois", "Wisconsin"):
+            self.assertIn(st, a.text)
+
+    def test_student_loan_options(self):
+        a = self._ks().answer("I'm a student going to a new university - do you have any loan options with flexibility?")
+        self.assertTrue(a.confident)
+        self.assertIn("student loan", a.text.lower())
+
+    def test_missing_entity_refuses_digit_free(self):
+        ks = SOL.build()
+        ks.ingest(Snapshot("E2_2026-09-28", "2026-09-28", [
+            Page("https://www.dupaco-int-test.org/plain", "Plain",
+                 "A plain page about savings.", "2026-09-28T00:00:00Z"),
+        ]))
+        a = ks.answer("What is Dupaco's routing number?")
+        self.assertFalse(a.confident)
+        self.assertNotRegex(a.text, r"\d")
+
+
 class TestFactsStaysOutOfConflicts(unittest.TestCase):
     def test_no_facts_conflicts(self):
         ks = SOL.build()

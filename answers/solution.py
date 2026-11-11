@@ -264,11 +264,15 @@ class CurrentTruth:
         dims = dict(claim["tier_dims"])
         value = claim["value"]
         value_text = claim.get("value_text", "")
-        content_hash = _content_hash(FACTS_PRODUCT, "text", dims, value_text, None)
+        # S2.4 entity facts carry the article's publish date as their
+        # effective_date (bitemporal value-date); other fact families leave it
+        # unset (None), exactly as before.
+        eff = claim.get("effective_date")
+        content_hash = _content_hash(FACTS_PRODUCT, "text", dims, value_text, eff)
         self.ledger.add_claim(
             product=FACTS_PRODUCT, metric="text", tier_dims=dims, value=value,
             value_text=value_text, min_earn=None,
-            effective_date=None, page_url=page.url, page_type=page_type,
+            effective_date=eff, page_url=page.url, page_type=page_type,
             page_rank=rank, snapshot_id=snap_id, snapshot_date=snap_date,
             quote=claim.get("quote"), content_hash=content_hash,
         )
@@ -740,6 +744,30 @@ class CurrentTruth:
         winners = list(trust_mod.pick_winners(claims).values())
         mode = slots["mode"]
         chosen: list = []
+
+        if mode == "entity":
+            # S2.4: the "who/what is Dupaco" fact class. All claims for one
+            # entity share ONE canonical key, so pick_winners has already
+            # resolved the freshest-published statement (publish date =
+            # effective_date); unknown entities refuse digit-free.
+            entity = slots.get("entity")
+            kept = [
+                c for c in winners
+                if c.tier_dims.get("kind") == "entity_fact"
+                and c.tier_dims.get("entity") == entity
+            ]
+            if not kept:
+                text, _ = synth.refusal()
+                return Answer(text=text, sources=[], confident=False, conflict_note=None)
+            chosen_claim = max(kept, key=lambda c: (c.effective_date or "", c.page_rank, c.page_url))
+            text = synth.ENTITY_TEMPLATES[entity](chosen_claim)
+            url, quote = self._facts_source(chosen_claim)
+            return Answer(
+                text=text,
+                sources=[Source(url=url, snapshot_id=snap_id, quote=quote)],
+                confident=True,
+                conflict_note=None,
+            )
 
         if mode == "link" and slots.get("link_family"):
             # rates-directory: page hosting the family's published rate rows.
