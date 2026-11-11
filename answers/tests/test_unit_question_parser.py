@@ -197,5 +197,87 @@ class TestCertificateSynonyms(unittest.TestCase):
         self.assertEqual(s["link_family"], "certificate")
 
 
+class TestParaphraseGrammar(unittest.TestCase):
+    """S3.3: trigger extensions found by the paraphrase self-benchmark
+    (78 hand-reworded variants of the public items; 100% same-claim)."""
+
+    def test_tier_balance_is_between(self):
+        s = Q.parse_question("What dividend rate do I get on Share Savings if my balance is between $10,000 and $24,999?")
+        self.assertEqual(s["mode"], "tier")
+        self.assertEqual(s["tier"], (10000.0, 24999.0))
+
+    def test_tier_bounds_with_and(self):
+        s = Q.parse_question("Share Savings pays what dividend rate on a $10,000 to $24,999 balance?")
+        self.assertEqual(s["tier"], (10000.0, 24999.0))
+
+    def test_branch_count_total_number_of(self):
+        s = Q.parse_question("What's the total number of Dupaco branches?")
+        self.assertEqual((s["family"], s["mode"], s.get("entity")), ("facts", "entity", "branch_count"))
+
+    def test_phone_number_of_branch_does_not_count(self):
+        # "number of" must be quantified — a phone number is not a count
+        s = Q.parse_question("What's the phone number of the Dubuque branch?")
+        self.assertNotEqual((s or {}).get("entity"), "branch_count")
+
+    def test_event_when_closure_date(self):
+        s = Q.parse_question("What's the closure date for the Hy-Vee branch?")
+        self.assertEqual(s["mode"], "event_when")
+        self.assertEqual(s["branch_subject"], "hyvee")  # tempered capture
+
+    def test_event_when_is_closing(self):
+        s = Q.parse_question("When is the Hy-Vee branch closing?")
+        self.assertEqual(s["mode"], "event_when")
+        self.assertEqual(s["branch_subject"], "hyvee")
+
+    def test_event_status_open_as_of(self):
+        s = Q.parse_question("Is the Hy-Vee branch open as of October 2026?")
+        self.assertEqual(s["mode"], "event_status")
+
+    def test_event_status_stay_open_location(self):
+        s = Q.parse_question("Did the Hy-Vee location stay open in October 2026?")
+        self.assertEqual(s["mode"], "event_status")
+        self.assertEqual(s["branch_subject"], "hyvee")
+
+    def test_branch_open_on_weekday_is_hours_not_status(self):
+        s = Q.parse_question("Is the Hy-Vee branch open on Sundays?")
+        self.assertEqual(s["mode"], "hours_lobby")
+
+    def test_branch_on_street_is_named_branch(self):
+        s = Q.parse_question("What are the lobby hours for a branch on Mullan Avenue?")
+        self.assertEqual(s["family"], "branch")
+        self.assertEqual(s["mode"], "hours_lobby")
+        self.assertEqual(s["branch_name"], "mullan avenue")
+
+    def test_link_which_page_lists_cd_rates(self):
+        s = Q.parse_question("Which page lists your CD rates?")
+        self.assertEqual(s["mode"], "link")
+        self.assertEqual(s["link_family"], "certificate")
+
+    def test_link_where_on_your_site_locator(self):
+        s = Q.parse_question("Where on your site is the branch and ATM locator?")
+        self.assertEqual(s["link_role"], "branch_atm_locator")
+
+    def test_highest_top_and_the_most(self):
+        for q in ("What's the top APY on Share Savings, and at what balance?",
+                  "Which Share Savings balance tier earns the most?"):
+            self.assertEqual(Q.parse_question(q)["mode"], "highest", q)
+
+    def test_wallet_named_wallets_without_wallet_word(self):
+        s = Q.parse_question("Does Dupaco support adding debit and credit cards to Apple Pay, Google Pay or Samsung Pay?")
+        self.assertEqual((s["family"], s["mode"]), ("facts", "wallet"))
+
+    def test_eligibility_what_do_i_need(self):
+        s = Q.parse_question("What do I need to be eligible for Dupaco membership?")
+        self.assertEqual(s["entity"], "membership_eligibility")
+
+    def test_eligibility_can_anyone_join(self):
+        s = Q.parse_question("Can anyone join Dupaco, or do you have to live in the charter area?")
+        self.assertEqual(s["entity"], "membership_eligibility")
+
+    def test_students_plural(self):
+        s = Q.parse_question("Do you have loan options for students heading to college?")
+        self.assertEqual(s["entity"], "student_loan")
+
+
 if __name__ == "__main__":
     unittest.main()

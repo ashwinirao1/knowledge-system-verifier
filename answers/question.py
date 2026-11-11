@@ -54,14 +54,16 @@ _GENERIC_SAVINGS_RE = re.compile(r"\bsavings?\b", re.I)
 _CHECKING_FAMILY = ["free_checking", "first_rate_checking"]
 
 _DO_ANY_RE = re.compile(r"\bdo any\b|\bdoes any\b|\bis there (?:a|any)\b", re.I)
-_HIGHEST_RE = re.compile(r"\b(highest|best|max(?:imum)?|tops?\s+out)\b", re.I)
+_HIGHEST_RE = re.compile(r"\b(highest|best|max(?:imum)?|tops?\s+out|top|the most)\b", re.I)
 _PCT_HYPO_RE = re.compile(r"(\d{1,2}(?:\.\d+)?)\s*%", re.I)
 _TIER_RANGE_RE = re.compile(
-    r"balance[s]?\s+(?:between|of|from|over|above)\s+\$?"
+    r"balance[s]?\s+(?:(?:is|was|are|'s)\s+)?(?:between|of|from|over|above)\s+\$?"
     r"([\d,]+(?:\.\d+)?)\s*(?:(?:and|to|-|–)\s*\$?([\d,]+(?:\.\d+)?))?",
     re.I,
 )
-_TIER_RANGE_ALT_RE = re.compile(r"\$([\d,]+(?:\.\d+)?)\s*(?:-|–|to)\s*\$([\d,]+(?:\.\d+)?)", re.I)
+_TIER_RANGE_ALT_RE = re.compile(
+    r"\$([\d,]+(?:\.\d+)?)\s*(?:-|–|to|and)\s*\$?([\d,]+(?:\.\d+)?)", re.I
+)
 
 
 # ---------------------------------------------------------------- loans (S1.2)
@@ -122,9 +124,28 @@ _ALL_SAME_RE = re.compile(r"\ball\b.*\bsame\b|\bsame\b.*\ball\b|every branch", r
 # S2.3 change events: "when does/did/will the X branch close" is an EVENT
 # question, not an hours question — it must win over the hours trigger, which
 # also matches "\bclos". Opening events are future scope (no corpus shape yet).
-_EVENT_WHEN_RE = re.compile(r"\bwhen\s+(?:does|did|will)\b", re.I)
-_EVENT_STILL_RE = re.compile(r"\bstill\s+open\b|\bhas\s+\S.+\bclosed\b|\bdid\s+\S.+\bclose\b", re.I)
-_EVENT_NAMED_RE = re.compile(r"\bthe\s+([a-z0-9'\- ]{3,40}?)\s+branch\b", re.I)
+_EVENT_WHEN_RE = re.compile(
+    r"\bwhen\s+(?:does|did|will|is|was|'s)\b"
+    r"|\bclosure date\b|\bwhat date\b|\bon what date\b|\bwhat day\b",
+    re.I,
+)
+_EVENT_STILL_RE = re.compile(
+    r"\bstill\s+open\b|\bhas\s+\S.+\bclosed\b|\bdid\s+\S.+\bclose\b"
+    r"|\b(?:stay|stayed|remain|remains|remained)\s+open\b"
+    # "Is the Hy-Vee branch open as of October 2026?" — a branch STATUS ask,
+    # unless a weekday follows ("open on Sundays" is an hours ask)
+    r"|\bis\s+the\s+((?:(?!\bthe\b)[\w'\- ]){3,40}?)\s+branch\s+open\b"
+    r"(?![a-z ,]*(?:mon|tues|wednes|thurs|fri|satur|sun)day)",
+    re.I,
+)
+_EVENT_NAMED_RE = re.compile(
+    # tempered: "the" may not appear INSIDE the captured name, so
+    # "the closure date for the Hy-Vee branch" captures "Hy-Vee",
+    # not "closure date for the hy-vee"
+    r"\bthe\s+((?:(?!\bthe\b)[a-z0-9'\- ]){3,40}?)\s+branch\b"
+    r"|\bthe\s+((?:(?!\bthe\b)[a-z0-9'\- ]){3,40}?)\s+location\b",
+    re.I,
+)
 
 
 def _norm_subject(name: str | None) -> str | None:
@@ -139,7 +160,7 @@ def _event_slots(q: str, mode: str) -> dict:
     named = None
     m = _EVENT_NAMED_RE.search(q)
     if m:
-        named = m.group(1).strip()
+        named = (m.group(1) or m.group(2)).strip()
     return {
         "family": "branch",
         "mode": mode,
@@ -153,11 +174,22 @@ def _parse_branch(q: str) -> dict | None:
     # branch-specific: only claims for that branch may be used or it's a refuse
     named = None
     m = re.search(
-        r"for the ([a-z0-9'\- ]{3,40}?) branch(?:\?|$)|at the ([a-z0-9'\- ]{3,40}?) branch",
+        r"for the ((?:(?!\bthe\b)[a-z0-9'\- ]){3,40}?) branch(?:\?|$)"
+        r"|at the ((?:(?!\bthe\b)[a-z0-9'\- ]){3,40}?) branch",
         q,
     )
     if m:
         named = (m.group(1) or m.group(2)).strip()
+    if not named:
+        # "a branch on Mullan Avenue" — a street-locator naming, just as
+        # branch-specific as "the X branch": ungrounded names must refuse,
+        # never fall back to generic hours presented as this branch's (R1)
+        m2 = re.search(
+            r"branch\s+(?:on|at)\s+([a-z0-9'\- ]{3,40}?)(?:\?|$|,| and\b|,? and what\b|\bin\b)",
+            q, re.I,
+        )
+        if m2:
+            named = m2.group(1).strip()
     if _EVENT_WHEN_RE.search(q) and re.search(r"\bclos", q, re.I):
         return _event_slots(q, "event_when")
     if _EVENT_STILL_RE.search(q):
@@ -256,13 +288,19 @@ _FACTS_UPDATE_RE = re.compile(
     r"\bpersonal information\b",
     re.I,
 )
-_FACTS_WALLET_RE = re.compile(r"\bmobile wallets?\b|\bwallets?\b", re.I)
+_FACTS_WALLET_RE = re.compile(
+    r"\bmobile wallets?\b|\bwallets?\b|\b(?:apple|google|samsung) pay\b", re.I
+)
 _FACTS_PAY_RE = re.compile(r"\b(?:apple|google|samsung) pay\b", re.I)
 _FACTS_PROGRAM_RE = re.compile(r"\bprogram\b", re.I)
 _FACTS_PROGRAM_NAME_RE = re.compile(
     r"(?:dupaco'?s?|the)\s+([\w$'-]{2,28}(?:\s+[\w$'-]{2,28}){0,2})\s+program\b", re.I
 )
-_FACTS_LINK_RE = re.compile(r"\blinks?\b|\burls?\b", re.I)
+_FACTS_LINK_RE = re.compile(
+    r"\blinks?\b|\burls?\b|\bwhich page\b|\bwhich web page\b"
+    r"|\bwhere (?:can|do|to) i (?:find|see|get|look)\b|\bwhere on (?:your|the) (?:web ?)?site\b",
+    re.I,
+)
 _FACTS_LOCATOR_RE = re.compile(r"\blocat(?:or|ing)\b|\bfind a branch\b|\bbranch (?:and|or) ATM\b", re.I)
 _FACTS_JOIN_RE = re.compile(r"\b(?:how do i (?:join|become a member)|join dupaco(?: online)?|become a member)\b", re.I)
 _FACTS_YEAR_RE = re.compile(r"\bin (20\d\d)\b", re.I)
@@ -280,9 +318,12 @@ def _parse_facts(q: str) -> dict | None:
         m = _FACTS_YEAR_RE.search(q)
         return {"family": "facts", "mode": "series", "series": series,
                 "year": int(m.group(1)) if m else None}
-    if re.search(r"how many\b", q) and re.search(r"branch(?:es)?\b|branch office", q, re.I):
+    if re.search(r"\bhow many\b|\b(?:total|exact|approx(?:imate)?)\s+number\s+of\b", q, re.I) \
+            and re.search(r"branch(?:es)?\b|branch office", q, re.I):
         # published-count semantics: the freshest published statement of the
-        # count, never a naive count of ledger rows (R5 replica discipline)
+        # count, never a naive count of ledger rows (R5 replica discipline).
+        # "number of" is only counted when quantified ("total/exact number of")
+        # so "the phone number of the branch" can never route here.
         return {"family": "facts", "mode": "entity", "entity": "branch_count"}
     if re.search(r"routing(?:\s+number)?|aba number", q, re.I):
         # "Can you repeat the routing number?" contains the noun phrase —
@@ -290,12 +331,19 @@ def _parse_facts(q: str) -> dict | None:
         return {"family": "facts", "mode": "entity", "entity": "routing_number"}
     if re.search(r"\bforbes\b", q, re.I):
         return {"family": "facts", "mode": "entity", "entity": "forbes_recognition"}
-    if re.search(r"who (?:is|'s|can)\b.*\b(?:eligible|join|become)|eligib\w* to (?:become|join)"
-                 r"|become a (?:dupaco )?member|membership eligib", q, re.I):
-        # eligibility must precede the join-LINK binding below — both match
-        # "become a member", but "who is eligible" asks for the RULE, not the URL
+    if re.search(
+        r"who (?:is|'s|can)\b.*\b(?:eligible|join|become)|eligib\w* to (?:become|join)"
+        r"|become a (?:dupaco )?member|membership eligib"
+        r"|eligib\w*\s+for\s+(?:dupaco\s+)?membership"
+        r"|what do i need to (?:be\s+)?eligib"
+        r"|can (?:anyone|anybody|just anyone)\b.*\bjoin",
+        q, re.I,
+    ):
+        # eligibility must precede the join-LINK binding below — several of
+        # these shapes also match "become a member"/"join", but they ask for
+        # the RULE, not the URL
         return {"family": "facts", "mode": "entity", "entity": "membership_eligibility"}
-    if re.search(r"\bstudent\b", q, re.I) and re.search(r"\bloan", q, re.I):
+    if re.search(r"\bstudents?\b", q, re.I) and re.search(r"\bloan", q, re.I):
         # "I'm a student ... any loan options?" — student and loan need not be
         # adjacent ("student loan" alone would miss dup-101's phrasing)
         return {"family": "facts", "mode": "entity", "entity": "student_loan"}

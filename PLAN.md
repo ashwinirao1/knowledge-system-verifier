@@ -502,9 +502,39 @@ quality, security, data boundary — before any ledger row means anything.**
   rows — this story is hidden-eval hardening, same as S3.1); selftest 0.83; 261 tests (+9:
   TestBusinessDisplay unit incl. drift guards + TestBusinessEntityResolution component incl. the
   Jump Start no-cross-bind refusal); ruff + leak guard clean.
-**S3.3 Paraphrase self-benchmark** — hand-reword the 40 public items into ~80 variants (selftest
-`t1`/`t1b` style); harness runner to compare route + numeric outcome
-- Done when: ≥90% route to the same claim; numeric output identical.
+**S3.3 Paraphrase self-benchmark — DONE (2026-11-11)**
+- [x] `tools/run_paraphrase_benchmark.py`: 78 hand-reworded variants (2 per gradable public item;
+  dup-005 judge-only excluded from the denominator). Semantics-preserving discipline: same product
+  entity, metric, tier, member, as_of and ask-type — only syntax/synonyms change. The runner
+  generates originals+variants JSONLs into **gitignored** `results/paraphrase_benchmark/` (derived
+  from organizer eval material — never committed), runs the UNMODIFIED harness runner on both via
+  `--eval`, and compares per group: numeric/time token multiset + confident flag (R3: same claim →
+  identical rendering → identical tokens). Gate: ≥90% same-claim.
+- [x] First run: **79.5% (62/78)** — 16 failures = 16 genuine grammar gaps, all fixed as clean
+  trigger extensions in `question.py`:
+  1. tier grammar: "my balance **is** between X and Y" (optional is/was) + "X **and** Y" in the
+     bounds-only regex (dup-045-p1);
+  2. branch count: "total/exact/approximate number of branches" (dup-073-p2) — quantified only, so
+     "the phone number of the branch" can never route to the count entity;
+  3. event_when: "closure date", "what date", "when is/was … closing" (dup-074-p1/p2);
+  4. event_status: "is the X branch open as of …" (weekday-guarded: "open on Sundays" stays an
+     hours ask) and "stay/remain open" (dup-075-p1/p2);
+  5. **tempered named-branch capture — the subtlest find**: "What's the closure date for the
+     Hy-Vee branch?" captured "closure date for the hy-vee" AS the branch name (the lazy `[… ]{3,40}?`
+     class allows "the" inside) → refusal. The tempered pattern `(?:(?!\bthe\b)[…]){3,40}?` forbids
+     "the" inside the captured name — applied to the event-named regex AND the hours named regex;
+  6. link asks: "which page lists", "where can I find", "where on your site" (dup-008-p1/p2, dup-080-p1);
+  7. highest: "top", "earns the most" (dup-046-p1/p2);
+  8. wallet: "…cards to Apple Pay/Google Pay/Samsung Pay" without the word "wallet" (dup-094-p1);
+  9. eligibility: "eligible for membership", "what do I need to be eligible", "can anyone join"
+     (dup-081-p1/p2 — must beat the join-LINK binding, kept in precedence order);
+  10. "students" plural (dup-101-p1) + "branch on <street>" treated as a NAMED branch → ungrounded
+      street names refuse instead of presenting generic hours as that branch's (dup-102-p1/p2, R1).
+- Done when: ✅ **78/78 = 100% same-claim** (gate ≥90%); 0.9481 public held exactly; selftest 0.83;
+  278 tests (+17 TestParaphraseGrammar locking every fixed trigger incl. the phone-number and
+  weekday guards); ruff + leak guard clean. Originals pass unchanged after the trigger work — the
+  benchmark doubles as a paraphrase regression harness for every future story (S3.4 router
+  determinism next).
 **S3.4 Router determinism test** — assert the same group never splits rule-path vs fallback for different numeric output.
 
 ### T4 — Fallback + speed/consistency hardening
@@ -555,6 +585,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S2.4 entity facts | 2026-11-11 | **0.9481 (+0.1473)** | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | six targets all 1.0: routing 273974581 (dup-054), replay via "routing number" noun-phrase (dup-055), branch count 22 via FRESHEST PUBLISH DATE (dup-073 — March 2026 says 23, April says 22 after the Hy-Vee closure; publish date = value-date), eligibility Iowa/Illinois/Wisconsin (dup-081), Forbes 'fifth' via freshest ordinal (dup-087), student loans non-adjacent grammar (dup-101); **entity_attribution 0.25→1.00, conflict_resolution 0.33→1.00, stale_trap 0.79→0.94**; dup-005 logged as judge-scored (empty must_include → 0.0 locally by scorer construction; enumeration behavior already correct); 241 tests (+20) |
 | S3.1 slot grammar + synonyms | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening, zero local regressions: "CD"/"CDs" added to the cert family trigger; bare "special" added TERM-ANCHORED only (month/year before the noun — unanchored would over-trigger on "any special requirements…"); "Where is the CD rates link?" facts-link case now reachable (was documented but unreachable through the old regex); "current"/"right now"/"today" + model-year phrasings verified already-passing (present tense = default when as_of is None, R3); 18-case paraphrase batch green incl. over-trigger guards; 252 tests (+11) |
 | S3.2 entity resolution | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening: the three pairs verified already-routed by the member-in-key design (S1.x) — business cards/certs/savings/checking/MM/high-yield all hit business rows, personal never cross-binds; Jump Start confirmed a distractor entity (zero corpus hits; refuses digit-free, dup-050 must_not); REAL gap fixed — business rows rendered plain personal names, now adopt the site's own qualified section names verbatim ("Business Share Savings", "Investor's Choice Money Market (Business)") via a business-headed-scoped, zero-invention rule so drifted personal headings can never churn labels (16-pair corpus survey first); personal answers byte-identical; 261 tests (+9) |
+| S3.3 paraphrase self-benchmark | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | **78/78 = 100% same-claim** (gate ≥90%): 2 hand-reworded variants per gradable public item (78; dup-005 judge-only excluded), unmodified harness runner compares token multiset + confident per group; first run 79.5% → 16 failures = 16 real grammar gaps fixed (tier "balance is between", quantified "number of", "closure date"/"when is closing", "is the X branch open" weekday-guarded, TEMPERED named-branch capture — "the closure date for the Hy-Vee branch" was capturing the whole phrase as the branch name, "which page/where on your site" link asks, "top/the most", wallet names without "wallet", "can anyone join", "students" plural, "branch on <street>" → named-refusal); benchmark now doubles as the standing paraphrase regression harness; 278 tests (+17) |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |
