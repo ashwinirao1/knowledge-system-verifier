@@ -49,6 +49,7 @@ import cleaning as cleaning_mod  # noqa: E402
 import conflicts as conflicts_mod  # noqa: E402
 import deposits as deposits_mod  # noqa: E402
 import facts as facts_mod  # noqa: E402
+import fallback as fallback_mod  # noqa: E402
 import ledger as ledger_mod  # noqa: E402
 import loans as loans_mod  # noqa: E402
 import question as question_mod  # noqa: E402
@@ -103,6 +104,10 @@ class CurrentTruth:
         self.transitions: list[dict] = []
         self.change_index: dict[tuple, dict] = {}
         self._prev_winners: dict | None = None
+        # S4.1 BM25 fallback: postings build incrementally at ingest (the
+        # heavy tokenization is ingest-time work, R2); answer time is a
+        # postings walk + one idf lookup per query term.
+        self._fallback = fallback_mod.FallbackIndex()
 
     # ------------------------------------------------------------------ contract
     def ingest(self, snapshot: Snapshot) -> None:
@@ -155,6 +160,9 @@ class CurrentTruth:
         text = cleaning_mod.clean(page.markdown or "")
         if not text:
             return
+        # S4.1 fallback index: same cleaned text the extractors see, split
+        # into sections at ingest (R2 — no answer-time tokenization).
+        self._fallback.add_page(snap_id, page.url, page.title, text)
         for tab in tables_mod.parse_tables(text):
             for claim in certificates_mod.extract_certificates(tab):
                 self._store_claim(claim, page, page_type, rank, snap_id, snap_date)
@@ -286,15 +294,20 @@ class CurrentTruth:
 
     def answer(self, question: str, as_of: Optional[str] = None) -> Answer:
         slots = question_mod.parse_question(question)
-        if not slots:
-            text, _ = synth.refusal()
-            return Answer(text=text, sources=[], confident=False, conflict_note=None)
         as_of_iso = trust_mod.parse_as_of(as_of)
         snap_dates = self.ledger.snapshot_dates()
         snap_id, clamp_status = trust_mod.clamp_snapshot(snap_dates, as_of_iso)
         if snap_id is None:
             text, _ = synth.refusal()
             return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        if slots is None:
+            # S4.1: total grammar miss — last-resort BM25 quote from the view
+            # snapshot, precision-first (informed refusals from PARSED
+            # questions are never overridden; see fallback.py policy).
+            ans = self._answer_fallback(question, snap_id)
+            if clamp_status == "before_baseline" and ans.conflict_note is None:
+                ans.conflict_note = synth.as_of_earliest_note(min(snap_dates.values()))
+            return ans
         # S2.2: an as_of before the baseline still answers (earliest snapshot),
         # with a provenance note. A disagreement note (about the values) takes
         # precedence when a family path sets one; the as_of note never overrides.
@@ -307,6 +320,19 @@ class CurrentTruth:
         if as_of_note and ans.conflict_note is None:
             ans.conflict_note = as_of_note
         return ans
+
+    def _answer_fallback(self, question: str, snap_id: str) -> Answer:
+        hit = self._fallback.best(snap_id, question)
+        if hit is None:
+            text, _ = synth.refusal()
+            return Answer(text=text, sources=[], confident=False, conflict_note=None)
+        sentence, url, quote = hit
+        return Answer(
+            text=sentence,
+            sources=[Source(url=url, snapshot_id=snap_id, quote=quote)],
+            confident=True,
+            conflict_note=None,
+        )
 
     def _answer_dispatch(self, slots: dict, snap_id: str, as_of_iso: str | None) -> Answer:
         if slots["family"] == "deposit":

@@ -563,7 +563,36 @@ quality, security, data boundary — before any ledger row means anything.**
 
 ### T4 — Fallback + speed/consistency hardening
 
-**S4.1 BM25 fallback index** over cleaned sections, **filtered by as_of**, passed through shared trust stack
+**S4.1 BM25 fallback — DONE (2026-11-11)** (over cleaned sections, filtered by as_of, precision-first)
+- [x] `answers/fallback.py` — pure-stdlib BM25 (k1=1.5, b=0.75, BM25+ idf; zero dependencies, R4):
+  - **Fires ONLY on total grammar misses** (parse_question → None). Informed refusals — questions the
+    grammar PARSED but the site doesn't answer — are NEVER overridden (that discipline is what keeps
+    should_refuse at 1.00; locked by a component test with matching text in the index).
+  - **View-scoped statistics**: idf/df computed per snapshot view (the same trust view every other
+    path answers from); sections filtered to the view snapshot — never cross-snapshot quotes.
+  - **Precision-first quote rule**: a quote unit (sentence OR table line — fee schedules are
+    line-shaped) qualifies only if it contains a published number ($x or x.xx%) IN THE UNIT and every
+    KEY query term (idf ≥ 0.5·max within the view; ask-verbs like "charge"/"pay" describe the ask,
+    not the fact — excluded); ≤280-char units only (whole-table blobs carry other fees' numbers);
+    rank by idf-overlap → shorter → earlier (deterministic, R3). Else the digit-free refusal.
+  - **Absent-term VETO**: if the question names something the view never mentions ("Titanium
+    Amethyst card", "dirigible loan"), refuse — a quote would attribute some OTHER product's number
+    (R1). This closed a real fabrication hole the component tests caught.
+  - Index cost at ingest (postings build per page, incremental — no finalize pass, idf per query
+    term at answer time): ingest 6.2 s → 7.9 s for 3266 pages (0.4% of budget); answer 3–6 ms (R2).
+- [x] **The kill-criterion fired in development and shaped the design**: heading-context matching
+  was tried (so "Rate and Fee Schedule" could scope fee rows) and it let blog headings
+  ("building a home…") pull construction-loan REFUSALS into confident wrong quotes — dup-145/147's
+  whole point. Reverted; documented in the module. The S3.3 benchmark (with its byte-identical
+  digit-free comparator) is the standing kill-criterion: **fallback stays because agreement held at
+  78/78 = 100% (gate ≥95%)** with the fallback active.
+- [x] Value delivered: the fallback answers a real question class no extractor family covers —
+  fee-schedule rows ("What do you charge for a stop payment?" → "Stop payment (check, ACH, & bill
+  pay) $30.00* per item", byte-identical on repeat, source cited) — while every should_refuse shape
+  still refuses digit-free. Honest-refusal recall widened without touching precision.
+- Done when: ✅ 78/78 same-claim (kill-criterion ≥95% passed); 0.9481 public held exactly; selftest
+  0.83; 304 tests (+16: TestTokenize/TestQuoteRules unit + TestFallbackPath component incl. the
+  informed-refusal precedence and as_of view filter); ruff + leak guard clean; 3.9/3.11/3.14 OK.
 - Hidden-eval insurance: the hidden set has "real paraphrase groups" — grammar-only routing is the
   biggest single risk (public paraphrase consistency 1.0 uses gentle rewordings). The fallback must
   refuse digit-free when BM25 confidence is low (R1), never answer from a weak match.
@@ -611,6 +640,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S3.2 entity resolution | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening: the three pairs verified already-routed by the member-in-key design (S1.x) — business cards/certs/savings/checking/MM/high-yield all hit business rows, personal never cross-binds; Jump Start confirmed a distractor entity (zero corpus hits; refuses digit-free, dup-050 must_not); REAL gap fixed — business rows rendered plain personal names, now adopt the site's own qualified section names verbatim ("Business Share Savings", "Investor's Choice Money Market (Business)") via a business-headed-scoped, zero-invention rule so drifted personal headings can never churn labels (16-pair corpus survey first); personal answers byte-identical; 261 tests (+9) |
 | S3.3 paraphrase self-benchmark | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | **78/78 = 100% same-claim** (gate ≥90%): 2 hand-reworded variants per gradable public item (78; dup-005 judge-only excluded), unmodified harness runner compares token multiset + confident per group; first run 79.5% → 16 failures = 16 real grammar gaps fixed (tier "balance is between", quantified "number of", "closure date"/"when is closing", "is the X branch open" weekday-guarded, TEMPERED named-branch capture — "the closure date for the Hy-Vee branch" was capturing the whole phrase as the branch name, "which page/where on your site" link asks, "top/the most", wallet names without "wallet", "can anyone join", "students" plural, "branch on <street>" → named-refusal); benchmark now doubles as the standing paraphrase regression harness; 278 tests (+17) |
 | S3.4 router determinism | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | invariant enforced at two layers: CI-safe pure-parser test (parse idempotence; all 39 groups route to ONE (family, mode); load-bearing slots agree — loans rate≡apr principled equivalence) + local benchmark strengthened (digit-free answers now compare BYTE-IDENTICAL text — token comparator was blind to URL-vs-prose route splits); 2 splits found & fixed (eligibility trigger hijacking "what's the LINK to become a member" — false-passed by the old comparator — now defers to join-link with both-way precedence guards; "every Dupaco branch" same-hours); **0 splits / 39 groups; 78/78 same-claim**; 287 tests (+9); T3 COMPLETE |
+| S4.1 BM25 fallback | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | pure-stdlib BM25 over cleaned sections (zero deps, R4); fires ONLY on total grammar misses — informed refusals never overridden; VIEW-scoped idf/df (trust view discipline); precision-first quote rule (number IN the unit + key idf-weighted terms + ≤280 chars, ask-verbs excluded, absent-term VETO against fabricated attribution — a hole the component tests caught); **kill-criterion fired in development** (heading-context let blog headings turn construction-loan refusals into confident wrong quotes — reverted, documented); fallback STAYS: benchmark 78/78 = 100% (gate ≥95%) with fallback active; value: fee-schedule rows now answered ("Stop payment … $30.00* per item", byte-identical repeats) while all should_refuse shapes still refuse; ingest 7.9 s (+1.7 s indexing), answer 3–6 ms; 304 tests (+16) |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |
