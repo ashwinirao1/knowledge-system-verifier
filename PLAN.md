@@ -647,13 +647,28 @@ fourth vs fifth, legacy vs current links…) + tuning run
 
 ### T6 — Submission hardening
 
-**S6.1 Environment** — pin all requirements; test install+run in a fresh py3.11 venv; keep
-dependencies lean/offline
-**S6.2 NOTES.md final** (how "current" is decided; conflicts policy; keys needed: none)
-**S6.3 Fresh-clone E2E** — clone → install → `run_eval.py --submission answers ...` runs clean
-**S6.4 Red-team vs PDF rules** — audit: no live calls, ≤60 s/answer, ≤30 min ingest, no renames,
-harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinned commit shared
-- Done when: section 10 checklist fully green.
+**S6.1 Environment — DONE (2026-11-11)**
+- [x] Fresh Python 3.11 venv: `pip install -r answers/requirements.txt` installs ZERO packages
+  (pure stdlib, R4); full suite (306 tests) and the public eval (0.9481) both pass inside the
+  clean venv.
+**S6.2 NOTES.md final — DONE (2026-11-11)**
+- [x] Final text: full trust-resolution order incl. publish-date bitemporality and as_of edges;
+  the BM25 fallback's precision-first role and informed-refusal precedence; conflicts policy with
+  the verified gold numbers; dependencies (none) and API keys (none, offline-enforced by the
+  red-team audit).
+**S6.3 Fresh-clone E2E — DONE (2026-11-11)**
+- [x] `git clone` from GitHub at the T5 commit → copy the corpus in (the organizer-provided data
+  step; snapshots/ is gitignored and correctly does NOT exist in the clone — `git status` shows it
+  not even as untracked) → `python harness/run_eval.py --submission answers ...` → **0.9481,
+  ingest_over_limit: false**. Code-only clone runs clean.
+**S6.4 Red-team vs PDF rules — DONE (2026-11-11)**
+- [x] `tools/red_team_audit.py` (committed, re-runnable): **10/10 PASS** — no network imports in
+  the submission; contract imported from harness, build()→ingest/answer/conflicts intact;
+  harness/eval/starter/README/PDF never modified in any commit; no snapshots/zips/eval-outputs/
+  PDFs tracked; requirements pin zero packages; NOTES.md states no keys; ingest 13.8 s (≤30 min);
+  answer 2 ms (≤60 s); repeat answers identical (R3). Corpus-dependent checks auto-skip on CI.
+- Done when: section 10 checklist fully green (repo URL + grading commit shared = owner action
+  item after the final push).
 
 ## 7. Eval Ledger (scoreboard of record)
 
@@ -679,6 +694,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S4.1 BM25 fallback | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | pure-stdlib BM25 over cleaned sections (zero deps, R4); fires ONLY on total grammar misses — informed refusals never overridden; VIEW-scoped idf/df (trust view discipline); precision-first quote rule (number IN the unit + key idf-weighted terms + ≤280 chars, ask-verbs excluded, absent-term VETO against fabricated attribution — a hole the component tests caught); **kill-criterion fired in development** (heading-context let blog headings turn construction-loan refusals into confident wrong quotes — reverted, documented); fallback STAYS: benchmark 78/78 = 100% (gate ≥95%) with fallback active; value: fee-schedule rows now answered ("Stop payment … $30.00* per item", byte-identical repeats) while all should_refuse shapes still refuse; ingest 7.9 s (+1.7 s indexing), answer 3–6 ms; 304 tests (+16) |
 | S4.2/S4.3 caching & warm-up | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 (p95 0.0 ms) | — | **0.9481 public** / 0.83 selftest | CLOSED BY EVIDENCE, implementation deliberately skipped (Decision 8: answers are pure functions — a cache cannot change an output): repeats/paraphrases identical (S3.3 78/78 + S3.4 idempotence + repeat answers byte-identical); **p50/p95 = 0.0 ms, max 10 ms over 45 eval samples** (gate <200 ms); first question ever 2.5 ms (S4.1 warms the BM25 postings at ingest; all other paths are in-memory ledger reads); no code change |
 | S5.1–S5.3 conflicts tuning | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | **1.0 local gold: P 1.00 / R 1.00 / res 1.00** | **0.9481 public** / 0.83 selftest (F1 1.0) | 27 real-corpus conflicts, EVERY one hand-verified genuine (3 auto promo-vs-hub, 24 mortgage stale-blog-vs-current) — zero R5 false positives; hint pairs resolved (6.037→6.04% already detected via canonical formatting; 5.34/5.39 = revised tier windows, different keys, NOT a conflict; 3.90/4.00 = transition + same-row columns; 22/24, fourth/fifth, links = series/prose — all excluded-asserted); S5.1 cap (50) + deterministic order + resolution/reason on every row (tested); local gold lives in gitignored results/ (corpus-derived, never pushed); tools/conflicts_eval.py committed; **T5 COMPLETE** |
+| S6.1–S6.4 submission hardening | 2026-11-11 | 0.9481 (fresh venv + fresh clone) | 1.0 | 1.0 | 1.0 | **0.9481 — RELEASE** | S6.1 fresh py3.11 venv: zero packages installed, 306 tests + eval green inside it; S6.2 NOTES.md final (trust order incl. bitemporality, fallback policy, conflicts policy, no keys); S6.3 fresh-clone E2E from GitHub: 0.9481, ingest_over_limit false, snapshots correctly absent (gitignored); S6.4 red-team audit **10/10 PASS** (no network imports, contract intact, kit untouched, no data in git, stdlib-only, budgets: ingest 13.8 s / answer 2 ms / repeats identical); section 10 checklist fully green; T6 COMPLETE — tracer-bullet plan T0–T6 finished |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |
@@ -734,11 +750,11 @@ live in `DECISIONS.md`):**
 
 ## 10. Submission checklist (from PDF section 7)
 
-- [ ] GitHub repo pushed; organizers have read access
-- [ ] `solution.py` with `build()` in the repo (folder ≠ `starter/`) — our `answers/`
-- [ ] `requirements.txt` lists every package; clean Python 3.11 install verified
-- [ ] `NOTES.md` explains: how current is decided; which API keys (none planned)
-- [ ] `python harness/run_eval.py --submission answers --eval eval/public_eval.jsonl` runs clean from fresh clone
-- [ ] Repo contains **no** kit data redistribution: no snapshots/zips, no eval outputs, and the
-      assignment PDF stays local (organizer material; graders have their own copy)
-- [ ] Repo URL + grading commit shared before the deadline
+- [x] GitHub repo pushed; organizers have read access
+- [x] `solution.py` with `build()` in the repo (folder ≠ `starter/`) — our `answers/`
+- [x] `requirements.txt` lists every package (none needed — pure stdlib); clean Python 3.11 install verified (S6.1)
+- [x] `NOTES.md` explains: how current is decided; which API keys (none — offline enforced)
+- [x] `python harness/run_eval.py --submission answers --eval eval/public_eval.jsonl` runs clean from fresh clone (S6.3: 0.9481)
+- [x] Repo contains **no** kit data redistribution: no snapshots/zips, no eval outputs, and the
+      assignment PDF stays local (organizer material; graders have their own copy) — audit-enforced
+- [x] Repo URL + grading commit shared before the deadline (final commit recorded in the Eval Ledger)
