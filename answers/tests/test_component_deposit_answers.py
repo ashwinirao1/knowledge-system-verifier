@@ -109,5 +109,56 @@ class TestDepositAnswers(unittest.TestCase):
         self.assertNotRegex(a.text, r"\d")
 
 
+class TestBusinessEntityResolution(unittest.TestCase):
+    """S3.2: personal vs business rows resolve by member (page-level
+    classification), and business rows carry the site's own qualified
+    product names. Bright Savings vs 'Jump Start' discipline: a product
+    the corpus never mentions must refuse digit-free, never cross-bind."""
+
+    BIZ_MD = """# Business Rates
+
+Business Share Savings
+
+| Account Type | Balance Tier | Dividend Rate | Annual Percentage Yield (APY)1 | Min. to Open | Min. to Earn |
+| --- | --- | --- | --- | --- | --- |
+| Share Savings | $100,000+ | 0.20% | 0.20%1 | $25.00 | $100,000.00 |
+| Share Savings | $0.01 – $99.99 | 0.00% | 0.00%1 | $25.00 | $5.00 |
+
+Rates are effective as of 06/25/2026 and are subject to change without notice.
+"""
+
+    def _ks(self):
+        ks = SOL.build()
+        ks.ingest(Snapshot("B_2026-09-01", "2026-09-01", [
+            Page("https://www.example.org/rates", "Rates", RATES_MD, "2026-09-01T00:00:00Z"),
+            Page("https://www.example.org/business/rates", "Business Rates", self.BIZ_MD,
+                 "2026-09-01T00:00:00Z"),
+        ]))
+        return ks
+
+    def test_business_savings_uses_business_rows_and_site_name(self):
+        a = self._ks().answer("What are the business savings rates?")
+        self.assertTrue(a.confident)
+        self.assertIn("Business Share Savings", a.text)
+        self.assertIn("0.20%", a.text)
+
+    def test_personal_savings_never_shows_business_rows(self):
+        a = self._ks().answer("What is the rate on Share Savings?")
+        self.assertTrue(a.confident)
+        self.assertIn("Share Savings", a.text)
+        self.assertNotIn("Business Share Savings", a.text)
+
+    def test_business_tier_set_is_distinct(self):
+        # the business table has a $0.01–$99.99 tier; the personal one starts at $0
+        a = self._ks().answer("What are the business savings rates?")
+        self.assertIn("$100,000 and up", a.text)
+
+    def test_unknown_product_refuses_never_cross_binds(self):
+        a = self._ks().answer("What is the rate on the Jump Start account?")
+        self.assertFalse(a.confident)
+        self.assertNotIn("Bright Savings", a.text)  # no cross-entity binding
+        self.assertNotRegex(a.text, r"\d")
+
+
 if __name__ == "__main__":
     unittest.main()

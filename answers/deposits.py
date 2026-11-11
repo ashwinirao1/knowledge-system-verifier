@@ -44,6 +44,21 @@ PRODUCT_ORDER = [
 ]
 
 
+def _business_display(section: str, display: str) -> str:
+    """S3.2 entity resolution: on business pages the section heading carries
+    the site's own qualified product name ("Business Share Savings",
+    "Investor's Choice Money Market (Business)") while the row's Account Type
+    cell says the plain name. Adopt the section name VERBATIM when the row
+    label is contained in it — never invent a name. Scoped to sections headed
+    with 'business' so drifted personal headings ("Share Savings Account",
+    "Saving Account Rates") can never churn personal labels."""
+    sec = (section or "").strip()
+    if sec and re.search(r"business", sec, re.I):
+        if display.lower() in sec.lower() and display.lower() != sec.lower():
+            return sec
+    return display
+
+
 def canonical_product(label: str) -> tuple[str, str] | None:
     s = (label or "").strip().strip("*").strip()
     if not s:
@@ -146,6 +161,7 @@ def extract_deposits(tab) -> list[dict]:
         if not ident:
             continue
         canon, display = ident
+        display = _business_display(tab.section, display)
         tier_i = _col_index(tab.headers, ["balance tier"])
         lo, hi, _raw = parse_balance_tier(cells[tier_i]) if 0 <= tier_i < len(cells) else (None, None, "")
         for idx, metric, period in columns:

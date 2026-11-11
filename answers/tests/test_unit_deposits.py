@@ -124,5 +124,60 @@ class TestProductAliases(unittest.TestCase):
         self.assertIsNone(D.canonical_product("Gold Star Checking"))
 
 
+class TestBusinessDisplay(unittest.TestCase):
+    """S3.2 entity resolution: business sections carry the site's own
+    qualified product name; row labels say the plain name. The section name
+    is adopted verbatim only for business-headed sections (drifted personal
+    headings like 'Share Savings Account' must never churn labels)."""
+
+    BIZ = """Business Share Savings
+
+| Account Type | Balance Tier | Dividend Rate | Annual Percentage Yield (APY)1 | Min. to Open | Min. to Earn |
+| --- | --- | --- | --- | --- | --- |
+| Share Savings | $0.01 – $99.99 | 0.00% | 0.00%1 | $25.00 | $5.00 |
+| Share Savings | $100,000+ | 0.20% | 0.20%1 | $25.00 | $100,000.00 |
+"""
+
+    PERSONAL_DRIFT = """Share Savings Account
+
+| Account Type | Balance Tier | Dividend Rate | Annual Percentage Yield (APY)1 | Min. to Open | Min. to Earn |
+| --- | --- | --- | --- | --- | --- |
+| Share Savings | $25,000+ | 0.20% | 0.20%1 | $25.00 | $25,000.00 |
+"""
+
+    BIZ_CHECKING = """Business Checking
+
+| Account Type | Balance Tier | Dividend Rate | Annual Percentage Yield (APY)1 | Min. to Open | Min. to Earn |
+| --- | --- | --- | --- | --- | --- |
+| 1st Rate Checking | $0.01 – $4,999.99 | 0.00% | 0.00%1 | $50.00 | $5.00 |
+"""
+
+    def _displays(self, md):
+        tabs = __import__("tables").parse_tables(md)
+        claims = D.extract_deposits(tabs[0])
+        return sorted({c["tier_dims"]["product_display"] for c in claims})
+
+    def test_business_section_qualifies_the_label(self):
+        self.assertEqual(self._displays(self.BIZ), ["Business Share Savings"])
+
+    def test_drifted_personal_section_unchanged(self):
+        # "Share Savings Account" must NOT become the display name
+        self.assertEqual(self._displays(self.PERSONAL_DRIFT), ["Share Savings"])
+
+    def test_business_checking_keeps_product_name(self):
+        # section "Business Checking" does not contain "1st Rate Checking"
+        self.assertEqual(self._displays(self.BIZ_CHECKING), ["1st Rate Checking"])
+
+    def test_parenthesised_business_section(self):
+        disp = D._business_display("Investor's Choice Money Market (Business)",
+                                   "Investor's Choice Money Market")
+        self.assertEqual(disp, "Investor's Choice Money Market (Business)")
+
+    def test_non_business_and_non_containing_never_change(self):
+        self.assertEqual(D._business_display("Share Savings", "Share Savings"), "Share Savings")
+        self.assertEqual(D._business_display("Saving Account Rates", "Bright Savings"), "Bright Savings")
+        self.assertEqual(D._business_display("", "Share Savings"), "Share Savings")
+
+
 if __name__ == "__main__":
     unittest.main()

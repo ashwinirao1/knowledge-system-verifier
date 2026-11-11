@@ -475,7 +475,33 @@ quality, security, data boundary — before any ledger row means anything.**
   exactly** (public eval has no reworded-CD items — this story is hidden-eval hardening, its value
   is the paraphrase margin, not the local score); selftest 0.83; 252 tests (+11: TestCertificateSynonyms
   unit + TestCertificateSynonymAnswers component incl. digit-free-refusal guard); ruff + leak guard clean.
-**S3.2 Entity resolution** (personal vs business; Bright Savings vs Jump Start; Money Market vs Share Savings)
+**S3.2 Entity resolution — DONE (2026-11-11)** (personal vs business; Bright Savings vs Jump Start; Money Market vs Share Savings)
+- [x] Recon verdict: the three pairs were largely ALREADY resolved by the S1.x tier-dims design —
+  member ("personal"/"business") is part of the canonical key (set by page-level classification at
+  store time) and every answer path filters on it; the deposit registry carries Bright Savings,
+  Investor's Choice Money Market, Share Savings, You Name It, Holiday Club, Launchpad, High-Yield as
+  distinct canonicals. Verification probe: business cards/certs/savings/checking/MM/high-yield all
+  route to business rows; personal questions never show business rows; Money Market vs Share Savings
+  and Bright Savings bind distinctly.
+- [x] "Jump Start" discipline: the name appears NOWHERE in any snapshot (grep across all five:
+  zero hits) — it is a DISTRACTOR entity (dup-050 `must_not_include: 'Jump Start'`). Correct
+  behavior = digit-free refusal with no cross-binding to Bright Savings. Locked by tests.
+- [x] The real gap found & fixed — business rows rendered PLAIN personal product names: "What are
+  the business savings rates?" said "Share Savings pays…" where the site's own section heading says
+  "Business Share Savings" (row labels say the plain name; the qualifier lives in the section).
+  Fix: `_business_display()` in deposits.py adopts the section name VERBATIM when the row label is
+  contained in it — never invents a name — and is scoped to sections headed with "business", so the
+  corpus's drifted personal headings ("Share Savings Account" ×4 pages, "Bright Savings Account",
+  "Saving Account Rates", "Money Market Rates") can NEVER churn personal labels (corpus-wide survey
+  of all 16 differing (section,label) pairs before choosing the scope). "Business Checking" keeps
+  "1st Rate Checking" (label not contained in section — and that IS the site's business product
+  name). Consumers: synth deposit labels + conflicts segment label; canonical keys untouched.
+- Done when: ✅ business answers carry site-faithful names ("Business Share Savings pays 0.00% APY
+  for balances of $0.01 – $99.99…", "Investor's Choice Money Market (Business) pays 0.20%…");
+  personal answers byte-identical; **0.9481 held exactly** (no scored public item touches business
+  rows — this story is hidden-eval hardening, same as S3.1); selftest 0.83; 261 tests (+9:
+  TestBusinessDisplay unit incl. drift guards + TestBusinessEntityResolution component incl. the
+  Jump Start no-cross-bind refusal); ruff + leak guard clean.
 **S3.3 Paraphrase self-benchmark** — hand-reword the 40 public items into ~80 variants (selftest
 `t1`/`t1b` style); harness runner to compare route + numeric outcome
 - Done when: ≥90% route to the same claim; numeric output identical.
@@ -528,6 +554,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S2.3 change events | 2026-11-10 | **0.8008 (+0.0543)** | 1.0 | 1.0 | — | **0.8008 public** / 0.83 selftest | dup-074/075 fixed: event_when/event_status grammar checked BEFORE the hours trigger ("\bclos" was hijacking); Hy-Vee closure date extracted from the announcement (value_text = site's rendering "March 31, 2026"; ISO event_date for tense); tense = f(event_date, view date) so historical as_of says "will close"; transition index at ingest (winners diffed per numeric key) answers "what changed between May and September" (3.90→4.00 verified); R5 replica collapse in changes rows ($200,000 vs $200000 labels); conflicts reason cites "Previous value X until <snap>"; **temporal_as_of 0.50 → 1.00**; 221 tests (+22) |
 | S2.4 entity facts | 2026-11-11 | **0.9481 (+0.1473)** | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | six targets all 1.0: routing 273974581 (dup-054), replay via "routing number" noun-phrase (dup-055), branch count 22 via FRESHEST PUBLISH DATE (dup-073 — March 2026 says 23, April says 22 after the Hy-Vee closure; publish date = value-date), eligibility Iowa/Illinois/Wisconsin (dup-081), Forbes 'fifth' via freshest ordinal (dup-087), student loans non-adjacent grammar (dup-101); **entity_attribution 0.25→1.00, conflict_resolution 0.33→1.00, stale_trap 0.79→0.94**; dup-005 logged as judge-scored (empty must_include → 0.0 locally by scorer construction; enumeration behavior already correct); 241 tests (+20) |
 | S3.1 slot grammar + synonyms | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening, zero local regressions: "CD"/"CDs" added to the cert family trigger; bare "special" added TERM-ANCHORED only (month/year before the noun — unanchored would over-trigger on "any special requirements…"); "Where is the CD rates link?" facts-link case now reachable (was documented but unreachable through the old regex); "current"/"right now"/"today" + model-year phrasings verified already-passing (present tense = default when as_of is None, R3); 18-case paraphrase batch green incl. over-trigger guards; 252 tests (+11) |
+| S3.2 entity resolution | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening: the three pairs verified already-routed by the member-in-key design (S1.x) — business cards/certs/savings/checking/MM/high-yield all hit business rows, personal never cross-binds; Jump Start confirmed a distractor entity (zero corpus hits; refuses digit-free, dup-050 must_not); REAL gap fixed — business rows rendered plain personal names, now adopt the site's own qualified section names verbatim ("Business Share Savings", "Investor's Choice Money Market (Business)") via a business-headed-scoped, zero-invention rule so drifted personal headings can never churn labels (16-pair corpus survey first); personal answers byte-identical; 261 tests (+9) |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |
