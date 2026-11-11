@@ -454,9 +454,27 @@ quality, security, data boundary — before any ledger row means anything.**
 
 ### T3 — Question understanding
 
-**S3.1 Slot grammar + synonym layer** (share certificate = CD; model-year phrasing; "current"/"right now")
-- Hidden-eval evidence (2026-11-10): dup-005 "certificate of accounts" phrasing already fails the
-  grammar — real rewording stress, not hypothetical.
+**S3.1 Slot grammar + synonym layer — DONE (2026-11-11)**
+- [x] Certificate synonyms: "CD"/"CDs" added to the family trigger (`_CERT_RE`) — "What is the APY
+  on a 12-month CD?" now parses (was None). Bare-noun "special" ("What is the current rate on the
+  17-month special?") added as a SEPARATE term-anchored trigger (`_CERT_SPECIAL_RE`): it requires a
+  month/year count before the noun, because an unanchored "special" would over-trigger on "any
+  special requirements…" phrasings (guarded by a dedicated test).
+- [x] Model-year phrasings verified passing (no change needed): "2024 auto loan over 60 months" →
+  loans/60/2024/rate; "Used 2019 vehicle, 72 month auto loan - what APR?" → loans/72/2019/apr.
+- [x] "current"/"right now"/"today" verified: present tense is the default when as_of is None — all
+  three phrasings already parse and answer correctly; no grammar change (R3 determinism preserved:
+  reworded tense words never change the selected snapshot).
+- [x] Bonus fix: "Where is the CD rates link?" — the facts-link case documented in `_parse_facts`
+  since S1.5 was UNREACHABLE through the old cert regex; with "cd" in the trigger it now correctly
+  returns the published rates-table URL (facts link path) instead of falling through.
+- Done when: ✅ 18-case paraphrase stress batch green (synonyms + qualifiers + over-trigger guards +
+  regressions of every previously-passing phrasing); end-to-end answers verified on the real corpus
+  (12-mo CD → 3.40% APY; 17-mo special → both special variants 4.10/4.20 — matching the established
+  dual-variant semantics; 10-mo jumbo special → 4.00% only, non-jumbo filtered). **0.9481 held
+  exactly** (public eval has no reworded-CD items — this story is hidden-eval hardening, its value
+  is the paraphrase margin, not the local score); selftest 0.83; 252 tests (+11: TestCertificateSynonyms
+  unit + TestCertificateSynonymAnswers component incl. digit-free-refusal guard); ruff + leak guard clean.
 **S3.2 Entity resolution** (personal vs business; Bright Savings vs Jump Start; Money Market vs Share Savings)
 **S3.3 Paraphrase self-benchmark** — hand-reword the 40 public items into ~80 variants (selftest
 `t1`/`t1b` style); harness runner to compare route + numeric outcome
@@ -509,6 +527,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S2.2 as_of edges | 2026-11-10 | 0.7465 (unchanged) | 1.0 | 1.0 | — | **0.7465 public** / 0.83 selftest | before-baseline as_of: refusal → EARLIEST snapshot + provenance note (confident, past tense); ISO range-validated ("2026-13-01" no longer a "date"); month names full+abbrev clamped to month end ("May 2026", "jun 2026"); all four edges unit-tested (19 new tests → 199); dup-006 edge re-verified end-to-end on the real corpus; dup-074/075 remain 0.0 = S2.3 change-events scope |
 | S2.3 change events | 2026-11-10 | **0.8008 (+0.0543)** | 1.0 | 1.0 | — | **0.8008 public** / 0.83 selftest | dup-074/075 fixed: event_when/event_status grammar checked BEFORE the hours trigger ("\bclos" was hijacking); Hy-Vee closure date extracted from the announcement (value_text = site's rendering "March 31, 2026"; ISO event_date for tense); tense = f(event_date, view date) so historical as_of says "will close"; transition index at ingest (winners diffed per numeric key) answers "what changed between May and September" (3.90→4.00 verified); R5 replica collapse in changes rows ($200,000 vs $200000 labels); conflicts reason cites "Previous value X until <snap>"; **temporal_as_of 0.50 → 1.00**; 221 tests (+22) |
 | S2.4 entity facts | 2026-11-11 | **0.9481 (+0.1473)** | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | six targets all 1.0: routing 273974581 (dup-054), replay via "routing number" noun-phrase (dup-055), branch count 22 via FRESHEST PUBLISH DATE (dup-073 — March 2026 says 23, April says 22 after the Hy-Vee closure; publish date = value-date), eligibility Iowa/Illinois/Wisconsin (dup-081), Forbes 'fifth' via freshest ordinal (dup-087), student loans non-adjacent grammar (dup-101); **entity_attribution 0.25→1.00, conflict_resolution 0.33→1.00, stale_trap 0.79→0.94**; dup-005 logged as judge-scored (empty must_include → 0.0 locally by scorer construction; enumeration behavior already correct); 241 tests (+20) |
+| S3.1 slot grammar + synonyms | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening, zero local regressions: "CD"/"CDs" added to the cert family trigger; bare "special" added TERM-ANCHORED only (month/year before the noun — unanchored would over-trigger on "any special requirements…"); "Where is the CD rates link?" facts-link case now reachable (was documented but unreachable through the old regex); "current"/"right now"/"today" + model-year phrasings verified already-passing (present tense = default when as_of is None, R3); 18-case paraphrase batch green incl. over-trigger guards; 252 tests (+11) |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

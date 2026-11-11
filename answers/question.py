@@ -24,7 +24,14 @@ _MONTHS_RE = re.compile(r"(\d{1,2})\s*[-\s]?\s*month", re.I)
 _WORD_MONTH_RE = re.compile(
     r"\b(" + "|".join(WORD_NUMBERS) + r")\s*[-\s]?\s*months?\b", re.I
 )
-_CERT_RE = re.compile(r"\b(certificates?|certs?)\b", re.I)
+# "CD" = certificate of deposit (the everyday synonym); the bare-noun
+# "special" trigger is TERM-ANCHORED ("the 17-month special") — an unanchored
+# "special" would over-trigger on "any special requirements..." phrasings.
+_CERT_RE = re.compile(r"\b(certificates?|certs?|cds?)\b", re.I)
+_CERT_SPECIAL_RE = re.compile(
+    r"\b\d{1,2}[\s-]*(?:month|year)s?[\s-]*(?:fixed[\s-]*)?(?:jumbo[\s-]*)?specials?\b",
+    re.I,
+)
 _SPECIAL_RE = re.compile(r"\bspecials?\b", re.I)
 _REGULAR_RE = re.compile(r"\bregulars?\b|\bstandard\b", re.I)
 _JUMBO_RE = re.compile(r"\bjumbos?\b", re.I)
@@ -366,7 +373,7 @@ def parse_question(question: str) -> dict | None:
     slots = _parse_facts(q)
     if slots:
         return slots
-    if _CERT_RE.search(q):
+    if _CERT_RE.search(q) or _CERT_SPECIAL_RE.search(q):
         return _parse_certificate(q)
     slots = _parse_deposit(q)
     if slots:

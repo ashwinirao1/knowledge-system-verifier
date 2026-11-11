@@ -221,5 +221,37 @@ class TestChanges(unittest.TestCase):
         self.assertFalse(a.confident)
 
 
+class TestCertificateSynonymAnswers(unittest.TestCase):
+    """S3.1: the synonym grammar end-to-end — bare 'CD' and the term-anchored
+    bare 'special' must reach the same winners as the cert-noun phrasings."""
+
+    def setUp(self):
+        self.ks = SOL.build()
+        self.ks.ingest(_snapshot("2026-09-28", NEW))
+
+    def test_bare_cd_answer(self):
+        a = self.ks.answer("What is the APY on a 17-month CD?")
+        self.assertTrue(a.confident)
+        self.assertIn("4.20%", a.text)  # jumbo 17-month row's APY
+        self.assertTrue(a.sources)
+
+    def test_term_anchored_special_answer(self):
+        a = self.ks.answer("What is the current rate on the 17-month special?")
+        self.assertTrue(a.confident)
+        self.assertIn("4.10%", a.text)
+        self.assertIn("4.20%", a.text)
+
+    def test_jumbo_special_answer(self):
+        a = self.ks.answer("What does the 10-month jumbo special pay?")
+        self.assertTrue(a.confident)
+        self.assertIn("4.00%", a.text)
+        self.assertNotIn("4.10%", a.text)  # non-jumbo 17-month row filtered out
+
+    def test_bare_special_no_overtrigger(self):
+        a = self.ks.answer("Are there any special requirements to open an account?")
+        self.assertFalse(a.confident)
+        self.assertNotIn("4.", a.text)  # digit-free refusal (R1)
+
+
 if __name__ == "__main__":
     unittest.main()

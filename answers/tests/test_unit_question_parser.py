@@ -145,5 +145,57 @@ class TestEntityGrammar(unittest.TestCase):
         self.assertEqual(s["mode"], "series")
 
 
+class TestCertificateSynonyms(unittest.TestCase):
+    """S3.1: share certificate = CD; term-anchored bare 'special'. The hidden
+    eval rewords product nouns — the certificate family must catch its
+    everyday synonyms without over-triggering on unrelated 'special'."""
+
+    def test_bare_cd(self):
+        for q, term in (("What is the APY on a 12-month CD?", 12),
+                        ("What are today's CD rates?", None),
+                        ("Do you offer CDs?", None)):
+            s = Q.parse_question(q)
+            self.assertEqual(s["family"], "certificate", q)
+            self.assertEqual(s["term_months"], term, q)
+
+    def test_cd_with_ira(self):
+        s = Q.parse_question("Do you offer CDs and IRAs?")
+        self.assertEqual(s["family"], "certificate")
+        self.assertTrue(s["ira"])
+
+    def test_term_anchored_special_without_cert_noun(self):
+        s = Q.parse_question("What is the current rate on the 17-month special?")
+        self.assertEqual(s["family"], "certificate")
+        self.assertEqual(s["term_months"], 17)
+        self.assertTrue(s["special"])
+
+    def test_term_anchored_jumbo_special(self):
+        s = Q.parse_question("What does the 10-month jumbo special pay?")
+        self.assertEqual(s["family"], "certificate")
+        self.assertEqual(s["term_months"], 10)
+        self.assertTrue(s["special"])
+        self.assertTrue(s["jumbo"])
+
+    def test_bare_special_does_not_trigger_certificate(self):
+        # no term anchor → not a certificate question (no over-trigger)
+        self.assertNotEqual(
+            Q.parse_question("Are there any special requirements to open an account?")["family"],
+            "certificate",
+        )
+        self.assertIsNone(Q.parse_question("What special offers do you have for new members?"))
+
+    def test_share_certificate_still_parses(self):
+        s = Q.parse_question("What is the rate on a 12-month share certificate?")
+        self.assertEqual(s["family"], "certificate")
+        self.assertEqual(s["term_months"] , 12)
+
+    def test_cd_rates_link_reaches_facts_link_path(self):
+        # documented facts case the pre-S3.1 cert regex could not reach
+        s = Q.parse_question("Where is the CD rates link?")
+        self.assertEqual(s["family"], "facts")
+        self.assertEqual(s["mode"], "link")
+        self.assertEqual(s["link_family"], "certificate")
+
+
 if __name__ == "__main__":
     unittest.main()
