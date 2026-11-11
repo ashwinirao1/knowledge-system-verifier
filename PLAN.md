@@ -535,7 +535,31 @@ quality, security, data boundary — before any ledger row means anything.**
   weekday guards); ruff + leak guard clean. Originals pass unchanged after the trigger work — the
   benchmark doubles as a paraphrase regression harness for every future story (S3.4 router
   determinism next).
-**S3.4 Router determinism test** — assert the same group never splits rule-path vs fallback for different numeric output.
+**S3.4 Router determinism test — DONE (2026-11-11)**
+- [x] `answers/tests/test_router_determinism.py` — the S3.4 invariant enforced at two layers:
+  - **Layer 1 (CI-safe, pure parser, no corpus):** (a) parse idempotence — same question → identical
+    slots, interleaved parsing leaks no state; (b) **every paraphrase group routes to the same
+    (family, mode)** across all 39 groups (original + 2 variants each, read from the committed
+    benchmark runner + eval file); (c) load-bearing slot agreement within groups (term/tier/metric/
+    entity/link_role/… intersection compared), with one principled equivalence: loans publish ONE
+    APR column, so "rate" vs "apr" asks are the same claim there (proven by benchmark token-identity);
+    deposits keep rate/apy strictly distinct.
+  - **Layer 2 (local corpus):** the S3.3 benchmark IS the numeric-output gate — its comparator
+    strengthened in this story: **digit-free answers (URLs, eligibility prose, refusals) now compare
+    byte-identical text**, because the token multiset is blind there. When the S4.1 BM25 fallback
+    lands, the same runner records rule-vs-fallback per group; a path split is acceptable only with
+    identical output, which Layer 2 enforces.
+- [x] Two group splits found and fixed (the test caught what the numeric comparator could not):
+  1. dup-082-p1 "What's the link to become a Dupaco member online?" — the eligibility trigger
+     hijacked an explicit LINK ask (benchmark had false-passed it: URL vs prose, both digit-free).
+     Fix: an explicit link/url/page ask defers to the join-link path (`_FACTS_LINK_RE` guard on the
+     eligibility branch, precedence preserved for "who is eligible…"); `_FACTS_JOIN_RE` extended to
+     "become a (dupaco) member". Regression guard test added for the rule-vs-link precedence both ways.
+  2. dup-104-p1 "the same at **every Dupaco branch**" — `_ALL_SAME_RE` only knew "every branch";
+     now `every (words){0,2} branch`.
+- Done when: ✅ **0 route splits / 39 groups; 78/78 = 100% same-claim** (strengthened comparator);
+  0.9481 public held exactly; selftest 0.83; 287 tests (+9 incl. the precedence regression guards);
+  ruff + leak guard clean. **T3 (question understanding) COMPLETE.**
 
 ### T4 — Fallback + speed/consistency hardening
 
@@ -586,6 +610,7 @@ harness/eval untouched, **no snapshot data in repo**, deadline: repo URL + pinne
 | S3.1 slot grammar + synonyms | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening, zero local regressions: "CD"/"CDs" added to the cert family trigger; bare "special" added TERM-ANCHORED only (month/year before the noun — unanchored would over-trigger on "any special requirements…"); "Where is the CD rates link?" facts-link case now reachable (was documented but unreachable through the old regex); "current"/"right now"/"today" + model-year phrasings verified already-passing (present tense = default when as_of is None, R3); 18-case paraphrase batch green incl. over-trigger guards; 252 tests (+11) |
 | S3.2 entity resolution | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | hidden-eval hardening: the three pairs verified already-routed by the member-in-key design (S1.x) — business cards/certs/savings/checking/MM/high-yield all hit business rows, personal never cross-binds; Jump Start confirmed a distractor entity (zero corpus hits; refuses digit-free, dup-050 must_not); REAL gap fixed — business rows rendered plain personal names, now adopt the site's own qualified section names verbatim ("Business Share Savings", "Investor's Choice Money Market (Business)") via a business-headed-scoped, zero-invention rule so drifted personal headings can never churn labels (16-pair corpus survey first); personal answers byte-identical; 261 tests (+9) |
 | S3.3 paraphrase self-benchmark | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | **78/78 = 100% same-claim** (gate ≥90%): 2 hand-reworded variants per gradable public item (78; dup-005 judge-only excluded), unmodified harness runner compares token multiset + confident per group; first run 79.5% → 16 failures = 16 real grammar gaps fixed (tier "balance is between", quantified "number of", "closure date"/"when is closing", "is the X branch open" weekday-guarded, TEMPERED named-branch capture — "the closure date for the Hy-Vee branch" was capturing the whole phrase as the branch name, "which page/where on your site" link asks, "top/the most", wallet names without "wallet", "can anyone join", "students" plural, "branch on <street>" → named-refusal); benchmark now doubles as the standing paraphrase regression harness; 278 tests (+17) |
+| S3.4 router determinism | 2026-11-11 | 0.9481 (held) | 1.0 | 1.0 | — | **0.9481 public** / 0.83 selftest | invariant enforced at two layers: CI-safe pure-parser test (parse idempotence; all 39 groups route to ONE (family, mode); load-bearing slots agree — loans rate≡apr principled equivalence) + local benchmark strengthened (digit-free answers now compare BYTE-IDENTICAL text — token comparator was blind to URL-vs-prose route splits); 2 splits found & fixed (eligibility trigger hijacking "what's the LINK to become a member" — false-passed by the old comparator — now defers to join-link with both-way precedence guards; "every Dupaco branch" same-hours); **0 splits / 39 groups; 78/78 same-claim**; 287 tests (+9); T3 COMPLETE |
 | T1 | | | | | — | | |
 | T2 | | | | | — | | |
 | T3 | | | | | — | | |

@@ -279,18 +279,24 @@ def main() -> int:
     for v in variants:
         o = orig_res[v["group"]]
         r = var_res[v["id"]]
-        same_claim = (
-            _tokens(o["answer"]["text"]) == _tokens(r["answer"]["text"])
-            and o["answer"]["confident"] == r["answer"]["confident"]
-        )
+        o_text, v_text = o["answer"]["text"], r["answer"]["text"]
+        if any(ch.isdigit() for ch in o_text):
+            # numeric claims: identical token multiset (R3 rendering)
+            same_text = _tokens(o_text) == _tokens(v_text)
+        else:
+            # digit-free claims (URLs, eligibility prose, refusals): the token
+            # comparator is blind here — require byte-identical text (R3:
+            # deterministic templates) so a route split can never hide
+            same_text = o_text == v_text
+        same_claim = same_text and o["answer"]["confident"] == r["answer"]["confident"]
         if same_claim:
             passed += 1
         else:
             failed.append({
                 "id": v["id"],
                 "question": v["question"],
-                "orig_text": o["answer"]["text"][:150],
-                "var_text": r["answer"]["text"][:150],
+                "orig_text": o_text[:150],
+                "var_text": v_text[:150],
                 "orig_conf": o["answer"]["confident"],
                 "var_conf": r["answer"]["confident"],
                 "correctness": r["correctness"],

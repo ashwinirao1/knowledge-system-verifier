@@ -278,6 +278,24 @@ class TestParaphraseGrammar(unittest.TestCase):
         s = Q.parse_question("Do you have loan options for students heading to college?")
         self.assertEqual(s["entity"], "student_loan")
 
+    def test_link_ask_beats_eligibility(self):
+        # S3.4 group-split fix: an explicit link/url/page ask wants the URL,
+        # even when the sentence also contains "become a (Dupaco) member"
+        s = Q.parse_question("What's the link to become a Dupaco member online?")
+        self.assertEqual((s["family"], s["mode"], s["link_role"]),
+                         ("facts", "link", "join_application"))
+
+    def test_eligibility_without_link_ask_still_the_rule(self):
+        # regression guard for the link-ask exception above
+        s = Q.parse_question("Who is eligible to become a Dupaco member?")
+        self.assertEqual((s["mode"], s["entity"]),
+                         ("entity", "membership_eligibility"))
+
+    def test_all_same_every_dupaco_branch(self):
+        # S3.4 group-split fix: "every <words> branch" is the same-hours ask
+        s = Q.parse_question("Are lobby hours the same at every Dupaco branch?")
+        self.assertEqual(s["mode"], "hours_same")
+
 
 if __name__ == "__main__":
     unittest.main()

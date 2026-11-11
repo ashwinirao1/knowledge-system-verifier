@@ -120,7 +120,7 @@ _HOURS_TRIGGER_RE = re.compile(r"\bhours?\b|\bopen\b|\bclos", re.I)
 _DRIVE_UP_RE = re.compile(r"\bdrive[- ]?up\b|\bdrive.?thru\b|\bdrive.?through\b", re.I)
 _ADDRESS_TRIGGER_RE = re.compile(r"\baddress\b|\blocated\b|\bwhere is\b", re.I)
 _HYVEE_RE = re.compile(r"\bhy-?vee\b", re.I)
-_ALL_SAME_RE = re.compile(r"\ball\b.*\bsame\b|\bsame\b.*\ball\b|every branch", re.I)
+_ALL_SAME_RE = re.compile(r"\ball\b.*\bsame\b|\bsame\b.*\ball\b|every\s+(?:\w+\s+){0,2}branch", re.I)
 # S2.3 change events: "when does/did/will the X branch close" is an EVENT
 # question, not an hours question — it must win over the hours trigger, which
 # also matches "\bclos". Opening events are future scope (no corpus shape yet).
@@ -302,7 +302,10 @@ _FACTS_LINK_RE = re.compile(
     re.I,
 )
 _FACTS_LOCATOR_RE = re.compile(r"\blocat(?:or|ing)\b|\bfind a branch\b|\bbranch (?:and|or) ATM\b", re.I)
-_FACTS_JOIN_RE = re.compile(r"\b(?:how do i (?:join|become a member)|join dupaco(?: online)?|become a member)\b", re.I)
+_FACTS_JOIN_RE = re.compile(
+    r"\b(?:how do i (?:join|become a member)|join dupaco(?: online)?|become a (?:dupaco )?member)\b",
+    re.I,
+)
 _FACTS_YEAR_RE = re.compile(r"\bin (20\d\d)\b", re.I)
 
 
@@ -331,7 +334,7 @@ def _parse_facts(q: str) -> dict | None:
         return {"family": "facts", "mode": "entity", "entity": "routing_number"}
     if re.search(r"\bforbes\b", q, re.I):
         return {"family": "facts", "mode": "entity", "entity": "forbes_recognition"}
-    if re.search(
+    if not _FACTS_LINK_RE.search(q) and re.search(
         r"who (?:is|'s|can)\b.*\b(?:eligible|join|become)|eligib\w* to (?:become|join)"
         r"|become a (?:dupaco )?member|membership eligib"
         r"|eligib\w*\s+for\s+(?:dupaco\s+)?membership"
@@ -341,7 +344,9 @@ def _parse_facts(q: str) -> dict | None:
     ):
         # eligibility must precede the join-LINK binding below — several of
         # these shapes also match "become a member"/"join", but they ask for
-        # the RULE, not the URL
+        # the RULE, not the URL. Exception: an explicit LINK/URL/PAGE ask
+        # ("what's the link to become a member?") wants the URL — that falls
+        # through to the join-link path below (S3.4 group-split fix).
         return {"family": "facts", "mode": "entity", "entity": "membership_eligibility"}
     if re.search(r"\bstudents?\b", q, re.I) and re.search(r"\bloan", q, re.I):
         # "I'm a student ... any loan options?" — student and loan need not be
